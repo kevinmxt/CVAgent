@@ -34,5 +34,13 @@ build/
 ### VS Code ###
 .vscode/
 
+### H2 Database ###
+data/
+*.mv.db
+*.trace.db
+
+### Claude ###
+.claude/
+
 ### Mac OS ###
 .DS_Store

@@ -1,0 +1,48 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>me.maxt</groupId>
+    <artifactId>CVAgent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>cvagent-agent</artifactId>
+  <packaging>jar</packaging>
+
+  <name>CVAgent Agent</name>
+  <description>Agent 模块：多角色评审、简历优化、编排器，独立可复用</description>
+
+  <dependencies>
+    <!-- 核心模块 -->
+    <dependency>
+      <groupId>me.maxt</groupId>
+      <artifactId>cvagent-core</artifactId>
+    </dependency>
+
+    <!-- LangChain4j Agentic -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-agentic</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-embeddings-bge-small-en-v15-q</artifactId>
+    </dependency>
+
+    <!-- 测试 -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-junit-jupiter</artifactId>
+    </dependency>
+  </dependencies>
+</project>

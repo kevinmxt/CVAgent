@@ -1,0 +1,58 @@
+{
+  "llm": {
+    "provider": "openai",
+    "apiKey": "demo",
+    "baseUrl": "https://api.deepseek.com",
+    "modelName": "deepseek-v4-flash",
+    "temperature": 0.7,
+    "maxTokens": 4096,
+    "timeoutSeconds": 120
+  },
+  "database": {
+    "mode": "h2",
+    "h2": {
+      "url": "jdbc:h2:file:./data/cvagent;AUTO_SERVER=TRUE",
+      "username": "sa",
+      "password": ""
+    },
+    "mysql": {
+      "url": "jdbc:mysql://localhost:3306/cvagent?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf-8",
+      "username": "root",
+      "password": "root"
+    }
+  },
+  "agent": {
+    "maxIterations": 3,
+    "passScore": 0.8,
+    "reviewerRoles": {
+      "hr": {
+        "name": "HR",
+        "description": "从HR角度评审候选人的软技能和文化匹配度",
+        "weight": 0.3,
+        "systemPrompt": "你是一个资深的HR招聘专家。请从以下角度评估候选人与岗位的匹配度：\n1) 沟通表达能力\n2) 团队协作经验\n3) 企业文化匹配度\n4) 职业发展潜力\n\n请给出0-1的评分和详细的反馈意见。\n\n评分标准：\n- 0至0.3：不匹配\n- 0.3至0.6：部分匹配\n- 0.6至0.8：较好匹配\n- 0.8至1.0：高度匹配\n\n岗位描述：\n{{jobDescription}}",
+        "userPrompt": "请评审这份简历（从HR视角）：\n\n{{cv}}"
+      },
+      "techExpert": {
+        "name": "技术专家",
+        "description": "从技术专家角度评审候选人的技术能力",
+        "weight": 0.4,
+        "systemPrompt": "你是一个资深技术专家。请从技术角度评估候选人：\n1) 技术栈匹配度\n2) 项目经验深度\n3) 架构设计能力\n4) 问题解决能力\n\n请给出0-1的评分和详细的反馈意见。\n\n评分标准：\n- 0至0.3：不匹配\n- 0.3至0.6：部分匹配\n- 0.6至0.8：较好匹配\n- 0.8至1.0：高度匹配\n\n岗位描述：\n{{jobDescription}}",
+        "userPrompt": "请评审这份简历（从技术视角）：\n\n{{cv}}"
+      },
+      "teamLeader": {
+        "name": "团队领导",
+        "description": "从团队领导角度评审候选人的综合能力",
+        "weight": 0.3,
+        "systemPrompt": "你是一个团队领导/技术经理。请评估候选人：\n1) 独立工作能力\n2) 业务理解能力\n3) 成长潜力\n4) 团队贡献预期\n\n请给出0-1的评分和详细的反馈意见。\n\n评分标准：\n- 0至0.3：不匹配\n- 0.3至0.6：部分匹配\n- 0.6至0.8：较好匹配\n- 0.8至1.0：高度匹配\n\n岗位描述：\n{{jobDescription}}",
+        "userPrompt": "请评审这份简历（从团队领导视角）：\n\n{{cv}}"
+      }
+    },
+    "tailor": {
+      "systemPrompt": "你是一个专业的简历优化专家。当前简历内容：\n{{cv}}\n\n请根据以下多角色评审反馈对简历进行优化，使HTML格式的简历更符合岗位要求。\n\n注意事项：\n1) 不要编造事实，只基于已有信息进行优化\n2) 保持HTML格式完整，不要破坏CSS样式\n3) 突出与岗位匹配的经验和技能\n4) 用词专业，排版清晰",
+      "userPrompt": "多角色评审反馈：\n{{cvReview}}\n\n请根据以上反馈，优化简历内容和排版。确保输出的HTML结构完整、样式美观。"
+    }
+  },
+  "server": {
+    "port": 8080
+  }
+}
