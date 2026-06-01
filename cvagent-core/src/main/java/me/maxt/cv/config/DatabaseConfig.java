@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,14 +60,13 @@ public class DatabaseConfig {
             executeSqlScript(jdbcUrl, username, password, ddlScript);
             log.info("数据库 DDL 执行完成");
 
-            // H2 模式下执行预置数据
+            // H2 模式下执行预置数据（仅首次启动时插入）
             if ("h2".equalsIgnoreCase(config.getDbMode())) {
-                try {
+                if (!hasPresetData(jdbcUrl, username, password)) {
                     executeSqlScript(jdbcUrl, username, password, "db/data-h2.sql");
                     log.info("预置数据插入完成");
-                } catch (Exception e) {
-                    // 预置数据可能已存在（唯一约束冲突），仅记录警告
-                    log.warn("预置数据插入可能已存在，跳过: {}", e.getMessage());
+                } else {
+                    log.info("预置数据已存在，跳过插入");
                 }
             }
 
@@ -123,6 +123,27 @@ public class DatabaseConfig {
             log.error("执行 SQL 脚本失败: {}", scriptPath, e);
             throw new AppException(ErrorCode.DATABASE_ERROR, e);
         }
+    }
+
+    /**
+     * 检查 cv_template 表中是否已有预置数据。
+     *
+     * @param jdbcUrl  JDBC URL
+     * @param username 用户名
+     * @param password 密码
+     * @return true 如果已有预置数据
+     */
+    private boolean hasPresetData(String jdbcUrl, String username, String password) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password);
+             Statement stmt = conn.createStatement()) {
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM cv_template WHERE is_preset = TRUE");
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (Exception e) {
+            log.debug("检查预置数据时忽略: {}", e.getMessage());
+        }
+        return false;
     }
 
     /**
