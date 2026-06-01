@@ -10,6 +10,7 @@
 - **LLM 后端**: DeepSeek API（兼容 OpenAI 接口）
 - **Web 框架**: Javalin 6.4.0
 - **数据库**: JOOQ 3.19.11 + HikariCP 6.2.1 + H2 2.3.232 / MySQL 9.1.0
+- **前端**: React 18 + Vite 5 + TypeScript 5.4
 - **文件解析**: Apache Tika 3.0.0
 - **序列化**: Jackson 2.17.0（jackson-databind、jackson-datatype-jsr310）
 - **日志**: Logback 1.5.12
@@ -103,55 +104,35 @@ CVAgent/
 ├── cvagent-web/                                    # Web 模块（基于 Javalin）
 │   ├── pom.xml
 │   └── src/
-│       └── main/java/me/maxt/cv/web/
-│           ├── App.java                            # Web 应用入口（Javalin 启动，路由注册）
-│           ├── dto/
-│           │   ├── request/
-│           │   │   ├── WorkExperienceImportRequest.java  # 工作经历导入请求 DTO
-│           │   │   ├── CvGenerateRequest.java            # CV 生成请求 DTO
-│           │   │   └── CvContentUpdateRequest.java       # CV 内容更新请求 DTO
-│           │   └── response/
-│           │       └── PageResult.java                   # 分页响应 DTO
-│           ├── auth/
-│           │   ├── AuthProvider.java                     # 认证提供者接口
-│           │   ├── PermissionCheck.java                  # 权限检查逻辑
-│           │   └── UserIdentity.java                     # 用户身份模型
-│           ├── interceptor/
-│           │   ├── CorsHandler.java                      # CORS 跨域处理
-│           │   └── ExceptionHandler.java                 # 全局异常处理
-│           └── route/
-│               ├── CvGenerationRoutes.java               # CV 生成 REST 路由（生成、查询、预览、导出、删除）
-│               ├── CvTemplateRoutes.java                 # 简历模板 REST 路由
-│               ├── JobDescriptionRoutes.java             # 岗位描述 REST 路由
-│               └── WorkExperienceRoutes.java             # 工作经历 REST 路由
-└── src/                                            # 旧版代码（待迁移至子模块）
-    ├── main/java/me/maxt/
-    │   ├── App.java                                # 应用入口（占位）
-    │   └── cv/
-    │       ├── agent/ChatModelProvider.java        # ChatModel 工厂（简化版，仅 OpenAI）
-    │       └── config/AppConfig.java               # RAG 主题配置（与 cvagent-core 版本不同）
-    └── test/
-        ├── java/me/maxt/
-        │   ├── AppTest.java                        # 基础测试类（JUnit 3 风格）
-        │   └── demo/
-        │       ├── CvReviewer.java                 # CV 审阅 Agent 接口（测试用）
-        │       ├── ScoredCvTailor.java             # CV 定制 Agent 接口（测试用）
-        │       ├── _3b_Loop_Agent_Example_States_And_Fail.java  # 循环 Agent 示例
-        │       ├── domain/
-        │       │   ├── Cv.java                     # 简历领域模型
-        │       │   └── CvReview.java               # 简历审阅结果模型
-        │       └── util/
-        │           ├── StringLoader.java           # 资源文件加载工具
-        │           ├── AgenticScopePrinter.java    # Agent 状态/对话可视化工具
-        │           └── log/
-        │               ├── BeautifulLogAppender.java  # 自定义 Logback Appender
-        │               ├── CustomLogging.java         # 日志级别控制
-        │               ├── LogLevels.java              # 日志级别枚举
-        │               └── LogParser.java              # HTTP 日志解析与美化输出
-        └── resources/
-            └── documents/
-                ├── master_cv.txt                   # 示例原始简历
-                └── job_description_backend.txt     # 示例职位描述
+│       ├── main/java/me/maxt/cv/web/
+│       │   ├── App.java                            # Web 应用入口（Javalin 启动，路由注册）
+│       │   ├── dto/
+│       │   │   ├── request/
+│       │   │   │   ├── WorkExperienceImportRequest.java  # 工作经历导入请求 DTO
+│       │   │   │   ├── CvGenerateRequest.java            # CV 生成请求 DTO
+│       │   │   │   └── CvContentUpdateRequest.java       # CV 内容更新请求 DTO
+│       │   │   └── response/
+│       │   │       └── PageResult.java                   # 分页响应 DTO
+│       │   ├── interceptor/
+│       │   │   ├── CorsHandler.java                      # CORS 跨域处理
+│       │   │   └── ExceptionHandler.java                 # 全局异常处理
+│       │   └── route/
+│       │       ├── CvGenerationRoutes.java               # CV 生成 REST 路由
+│       │       ├── CvTemplateRoutes.java                 # 简历模板 REST 路由
+│       │       ├── JobDescriptionRoutes.java             # 岗位描述 REST 路由
+│       │       └── WorkExperienceRoutes.java             # 工作经历 REST 路由
+│       ├── main/frontend/                          # React 前端 SPA
+│       │   ├── package.json                            # React 18 + Vite 5 + TypeScript
+│       │   ├── vite.config.ts                          # API 代理到 localhost:8080
+│       │   └── src/
+│       │       ├── api/                                # REST API 客户端（fetch 封装）
+│       │       ├── components/                         # 通用组件（DataTable/Pagination/Modal/FileUpload/ScoreGauge）
+│       │       ├── pages/                               # 页面（工作经历/模板/JD/CV生成/CV结果）
+│       │       └── hooks/                              # 自定义 Hooks（分页/CRUD/CV生成状态机）
+│       ├── main/scripts/                           # 启动脚本
+│       │   ├── start.bat / start.sh                    # 含 JVM 参数（-Xmx512m）
+│       └── main/resources/
+│           └── public/                             # 前端构建产物（构建时自动生成）
 ```
 
 ## 模块说明
@@ -160,9 +141,7 @@ CVAgent/
 |------|------|
 | `cvagent-core` | 核心模块，提供公共设施（ErrorCode 全局错误码、AppException 异常基类、ErrorResponse 错误响应体、FileImportUtil 文件导入）、配置管理（AgentPromptConfig 提示词加载、AppConfig 环境变量、DatabaseConfig 数据库、DataSourceConfig 数据源连接池）、数据实体（CvTemplate 简历模板、WorkExperience 工作经历、JobDescription 岗位描述、GeneratedCv 生成简历、CvGenerationRecord 迭代记录）、数据仓库（CvTemplateRepository、GeneratedCvRepository、JobDescriptionRepository、WorkExperienceRepository）、业务服务（CvGenerationService 简历生成编排、CvTemplateService 模板管理、ExportService 简历导出、JobDescriptionService JD 管理、WorkExperienceService 工作经历管理）、ChatModel 工厂等 |
 | `cvagent-agent` | Agent 模块，承载多角色简历评审、定制与编排体系。包含 `ReviewerRole` 抽象接口（定义角色标识、名称、描述、系统提示词、用户提示词和评分权重）、`CvReviewerAgent` 通用评审 Agent 接口（基于 LangChain4j AI Service，支持动态注入角色 Prompt）、`CvTailorAgent` 简历定制 Agent 接口（基于 LangChain4j AI Service）、`CvGenerationOrchestrator` 编排器（协调多角色 Agent 循环评审与优化，聚合结果并记录迭代快照）、`CvReviewResult` 单角色评审 DTO 和 `MultiRoleReviewResult` 多角色综合评审 DTO（含加权评分和合并反馈）。依赖 `cvagent-core` |
-| `cvagent-web` | Web 模块，基于 Javalin 提供 REST API 接口。已实现 `App` 应用启动入口（含路由注册与 Javalin 配置）、请求 DTO（`WorkExperienceImportRequest`、`CvGenerateRequest`、`CvContentUpdateRequest`）、响应 DTO（`PageResult` 分页结果）、认证模块（`AuthProvider` 接口、`UserIdentity` 用户身份、`PermissionCheck` 权限检查）、拦截器（`ExceptionHandler` 全局异常处理、`CorsHandler` 跨域处理）、REST 路由（`CvGenerationRoutes` CV 生成、`CvTemplateRoutes` 模板管理、`JobDescriptionRoutes` JD 管理、`WorkExperienceRoutes` 工作经历管理）。依赖 `cvagent-core` 和 `cvagent-agent` |
-
-> **注意**：子模块目前处于开发初期。`cvagent-agent` 已包含 `ReviewerRole` 接口、`CvReviewerAgent` 评审 Agent、`CvTailorAgent` 定制 Agent、`CvGenerationOrchestrator` 编排器、`CvReviewResult` 和 `MultiRoleReviewResult` DTO。`cvagent-web` 已实现 `App` 启动入口、请求/响应 DTO、认证模块、拦截器和全部 REST 路由（`CvGenerationRoutes`、`CvTemplateRoutes`、`JobDescriptionRoutes`、`WorkExperienceRoutes`）。现有示例代码（`CvReviewer`、`ScoredCvTailor`、循环 Agent 示例等）仍位于根目录 `src/` 下，后续将迁移至对应子模块。根目录下的 `ChatModelProvider`（简化版，仅支持 OpenAI）和 `AppConfig`（RAG 主题，使用 `RAG_*` 环境变量前缀）与 `cvagent-core` 中的对应版本不同，属于旧版实现，待迁移完成后移除。
+| `cvagent-web` | Web 模块，基于 Javalin 提供 REST API + React 前端 SPA。包含 `App` 启动入口（含 Jackson JavaTimeModule、静态文件服务、SPA 回退）、请求/响应 DTO、拦截器（CORS、全局异常处理）、4 组 REST 路由。前端使用 React 18 + Vite 5 + TypeScript，`mvn package` 时自动构建并打包到 Fat JAR 中。依赖 `cvagent-core` 和 `cvagent-agent` |
 
 ## 快速开始
 
@@ -210,63 +189,79 @@ git clone <repo-url> && cd CVAgent
 | `CV_DB_MODE` | 数据库模式（h2 / mysql） | `h2` |
 | `CV_AGENT_MAX_ITERATIONS` | Agent 最大迭代次数 | `3` |
 | `CV_AGENT_PASS_SCORE` | Agent 通过评分阈值 (0~1) | `0.8` |
+| `CV_DATA_DIR` | H2 数据库目录（绝对路径） | JAR 同级 `data/` |
 | `CV_SERVER_PORT` | HTTP 服务端口 | `8080` |
 
 > 还支持 `CV_LLM_PROVIDER`、`CV_LLM_SYSTEM_PROMPT`、`CV_DB_H2_URL`、`CV_DB_MYSQL_URL`、`CV_DB_MYSQL_USERNAME`、`CV_DB_MYSQL_PASSWORD` 等环境变量，详见 `cvagent-core` 中的 `AppConfig.java`。
 
-3. **编译项目**
+3. **编译并打包**
 
 ```bash
+# 编译所有模块
 mvn compile
+
+# 一键打包（含前端构建、Fat JAR、启动脚本）
+mvn package -pl cvagent-web -am -DskipTests
 ```
 
-4. **运行 Web 服务**
+打包后在 `cvagent-web/target/` 生成：
+- `cvagent-web-1.0.0-SNAPSHOT.jar` — 自包含 Fat JAR
+- `start.bat` / `start.sh` — 启动脚本
+
+4. **启动服务**
 
 ```bash
-mvn exec:java -pl cvagent-web -Dexec.mainClass="me.maxt.cv.web.App"
+# 方式一：直接运行 JAR
+java -jar cvagent-web/target/cvagent-web-1.0.0-SNAPSHOT.jar
+
+# 方式二：使用启动脚本（Windows）
+cvagent-web\target\start.bat
+
+# 方式三：使用启动脚本（Linux/Mac）
+./cvagent-web/target/start.sh
 ```
 
-5. **运行示例**
+启动后访问 `http://localhost:8080` 即可使用前端界面。
 
-在 IDE 中直接运行 `_3b_Loop_Agent_Example_States_And_Fail` 的 `main` 方法，或通过 Maven exec 插件运行：
+5. **前端开发模式**（热更新，独立于后端）
 
 ```bash
-mvn exec:java -Dexec.mainClass="me.maxt.demo._3b_Loop_Agent_Example_States_And_Fail"
+cd cvagent-web/src/main/frontend
+npm install      # 首次运行
+npm run dev      # 启动 Vite 开发服务器，API 代理到 localhost:8080
 ```
 
-> **注意**：`exec-maven-plugin` 未在项目 POM 中预设，如需命令行运行请先在 `pom.xml` 中添加该插件配置。
+6. **运行测试**
+
+```bash
+# 运行全部测试
+mvn verify
+
+# 运行指定模块测试
+mvn test -pl cvagent-core
+```
 
 ## 核心功能
 
 ### AI Agent 简历审阅
 
-`CvReviewer` Agent 以招聘经理的视角对简历进行评分和反馈，输出包含 0~1 分值和详细反馈意见的 `CvReview` 对象。
+`CvReviewerAgent` 基于 LangChain4j AI Service，支持多角色评审体系：HR（权重 0.3）、技术专家（权重 0.4）、团队领导（权重 0.3）。每个角色以独立视角对简历评分和反馈，最终按权重计算综合评分。
 
-> 完整配置（`cvagent-core/src/main/resources/config.json`）中预定义了多角色评审体系：HR（权重 0.3）、技术专家（权重 0.4）、团队领导（权重 0.3），支持加权综合评分。`AgentPromptConfig` 提供了默认的中文 Prompt，可通过配置文件自定义各角色的提示词。`cvagent-agent` 模块中的 `ReviewerRole` 接口定义了评审角色的标准契约，`CvReviewerAgent` 基于 LangChain4j AI Service 提供通用的评审 Agent 实现，`CvReviewResult` 和 `MultiRoleReviewResult` DTO 分别承载单角色和多角色综合评审结果。
+> 各角色的系统提示词和用户提示词可通过 `config.json` 中的 `agent.reviewerRoles` 配置自定义，`AgentPromptConfig` 提供了默认的中文 Prompt。
 
 ### AI Agent 简历定制
 
-`CvTailorAgent`（位于 `cvagent-agent` 模块）和 `ScoredCvTailor`（位于 `src/test`）提供了简历定制能力——根据审阅反馈对简历进行针对性优化，使其更匹配目标职位，且不会编造不实信息。
-
-### 循环优化流水线
-
-`_3b_Loop_Agent_Example_States_And_Fail` 展示了完整的 Agent 流水线：
-
-1. 审阅 Agent 对当前简历打分并给出反馈
-2. 定制 Agent 根据反馈优化简历
-3. 循环执行直到分数达标（≥ 0.8）或达到最大迭代次数（3 次）
-4. 输出最终优化后的简历、最终评分及完整的审阅历史
-
-示例程序从 `src/test/resources/documents/` 加载原始简历（`master_cv.txt`）和职位描述（`job_description_backend.txt`），也可替换为其他职位来观察不匹配场景下的 Agent 行为。
+`CvTailorAgent` 根据多角色评审反馈对简历进行针对性优化，使其更匹配目标职位。核心原则：不编造事实，只基于已有信息优化，保持 HTML 格式完整。
 
 ### Agent 编排器
 
-`CvGenerationOrchestrator`（位于 `cvagent-agent` 模块）是循环优化流水线的正式实现，提供：
+`CvGenerationOrchestrator`（位于 `cvagent-agent` 模块）协调迭代优化流水线：
 
-- 多角色评审协调：依次调用各角色 Agent 进行独立评审，计算加权综合评分
-- 迭代循环控制：在评分达标或达到最大迭代次数时退出
-- 结果聚合：合并各角色的反馈意见，记录完整的迭代历史快照
-- 异常处理：单角色评审失败时不影响整体流程，自动降级处理
+1. 调用 `CvGenerationService.fillTemplate()` 将工作经历数据填入 HTML 模板
+2. `performMultiRoleReview()` 依次调用各角色 Agent 独立评审，计算加权综合评分
+3. 达到通过阈值（默认 0.8）或最大迭代次数（默认 3）时退出
+4. `performTailoring()` 根据合并反馈优化简历
+5. 记录每轮迭代的完整快照（评分、反馈、简历内容）
 
 ### REST API（cvagent-web）
 
@@ -277,6 +272,16 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 - **认证体系**：`AuthProvider` 接口 + `PermissionCheck` 权限校验 + `UserIdentity` 用户身份模型
 - **全局处理**：`ExceptionHandler` 统一异常处理、`CorsHandler` 跨域支持
 - **分页支持**：`PageResult` 泛型分页响应 DTO
+
+### 前端 SPA（React + Vite + TypeScript）
+
+`cvagent-web/src/main/frontend/` 目录包含完整的单页应用：
+
+- **工作经历维护**：支持从 txt/docx/html/pdf 文件导入，AI 自动解析姓名、邮箱、电话、技能、个人简介、工作经历、教育背景等字段，支持在线编辑和删除
+- **简历模板维护**：预置 2 套模板（标准专业/简洁高效），支持自定义模板上传，预置模板受保护不可删除
+- **JD 维护**：支持文件导入和手动创建，存储职位和公司信息
+- **CV 生成**：选择工作经历 + 模板 + JD，由 AI Agent 多角色评审（HR/技术/领导），评分达标后生成 HTML 简历，支持预览、在线编辑和导出下载。低于阈值时展示评分详情和提升建议
+- **构建自动化**：`mvn package` 时自动执行 `npm install && npm run build`，产物输出到 `resources/public/`，由 Javalin 作为静态文件提供服务
 
 ### 灵活配置
 
@@ -290,7 +295,7 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 - `CvTemplateService`：简历模板管理服务，支持模板 CRUD，预置模板受保护不可删除
 - `ExportService`：简历导出服务，将生成的 HTML 简历导出为可下载的文件流，支持生成文件名和导出状态标记
 - `JobDescriptionService`：岗位描述管理服务，支持从文件导入（txt/docx/html/pdf）、手动创建、分页查询、编辑和删除
-- `WorkExperienceService`：工作经历管理服务，支持从文件导入、手动编辑个人信息和履历字段
+- `WorkExperienceService`：工作经历管理服务，支持从文件导入（AI 自动解析姓名/邮箱/电话/技能/个人简介/工作经历/教育背景）、手动编辑个人信息和履历字段
 
 ### 数据实体
 
@@ -306,7 +311,7 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 - `JobDescriptionRepository`：基于 JOOQ 的数据访问层，提供岗位描述的 CRUD 操作
 - `WorkExperienceRepository`：基于 JOOQ 的数据访问层，提供工作经历的 CRUD 操作
 
-### 日志美化
+### 日志
 
-`BeautifulLogAppender` + `LogParser` 提供自定义日志输出，可过滤框架噪音，美化 HTTP 请求/响应、Agent 对话和工具调用的展示。通过 `CustomLogging.setLevel()` 切换日志级别（`NONE` / `PRETTY` / `DEBUG` / `INFO`）。
+使用 Logback 统一日志输出，支持控制台和文件追加器，日志级别可通过 `logback.xml` 配置。JOOQ 的 SQL 执行日志和 LLM API 调用日志均被纳入统一体系。
 
