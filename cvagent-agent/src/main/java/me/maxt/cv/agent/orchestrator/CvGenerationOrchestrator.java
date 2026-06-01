@@ -86,12 +86,7 @@ public class CvGenerationOrchestrator {
         // 迭代记录列表
         List<IterationSnapshot> iterationHistory = new ArrayList<>();
 
-        // 构建 Agent
-        CvReviewerAgent reviewer = AgenticServices.agentBuilder(CvReviewerAgent.class)
-                .chatModel(chatModel)
-                .outputKey("cvReview")
-                .build();
-
+        // 构建优化 Agent
         CvTailorAgent tailor = AgenticServices.agentBuilder(CvTailorAgent.class)
                 .chatModel(chatModel)
                 .outputKey("cv")
@@ -100,7 +95,7 @@ public class CvGenerationOrchestrator {
         // 构建循环 Agent
         // 在 exitCondition 中执行多角色评审并检查退出条件
         UntypedAgent loopAgent = AgenticServices
-                .loopBuilder().subAgents(reviewer, tailor)
+                .loopBuilder().subAgents(tailor)
                 .outputKey("cvAndReview")
                 .output(scope -> {
                     Map<String, Object> output = new LinkedHashMap<>();

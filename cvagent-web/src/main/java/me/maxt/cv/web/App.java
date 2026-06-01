@@ -1,8 +1,13 @@
 package me.maxt.cv.web;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.javalin.Javalin;
+import io.javalin.json.JavalinJackson;
+import me.maxt.cv.agent.ChatModelProvider;
 import me.maxt.cv.config.AgentPromptConfig;
 import me.maxt.cv.config.AppConfig;
+import dev.langchain4j.model.chat.ChatModel;
 import me.maxt.cv.store.datasource.DataSourceConfig;
 import me.maxt.cv.store.repository.CvTemplateRepository;
 import me.maxt.cv.store.repository.GeneratedCvRepository;
@@ -57,19 +62,29 @@ public class App {
         JobDescriptionRepository jdRepo = new JobDescriptionRepository();
         GeneratedCvRepository generatedCvRepo = new GeneratedCvRepository();
 
-        // 4. 创建 Service 实例
+        // 4. 创建 LLM 模型（用于工作经历智能解析）
+        ChatModel chatModel = ChatModelProvider.createChatModel(config);
+
+        // 5. 创建 Service 实例
         WorkExperienceService workExpService = new WorkExperienceService(workExpRepo);
+        workExpService.setChatModel(chatModel);
+        // 6. 创建 Service 实例（续）
         CvTemplateService templateService = new CvTemplateService(templateRepo);
         JobDescriptionService jdService = new JobDescriptionService(jdRepo);
         CvGenerationService cvGenService = new CvGenerationService(
                 workExpRepo, templateRepo, jdRepo, generatedCvRepo);
         ExportService exportService = new ExportService();
 
-        // 5. 创建 Agent 相关配置
+        // 7. 创建 Agent 相关配置
         AgentPromptConfig promptConfig = new AgentPromptConfig(config);
 
-        // 6. 创建 Javalin 实例
+        // 8. 创建 Javalin 实例
         Javalin app = Javalin.create(javalinConfig -> {
+            // 配置 Jackson 序列化 Java 8 时间类型为 ISO-8601 字符串
+            javalinConfig.jsonMapper(new JavalinJackson().updateMapper(mapper -> {
+                mapper.registerModule(new JavaTimeModule());
+                mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            }));
             javalinConfig.http.defaultContentType = "application/json; charset=UTF-8";
             javalinConfig.staticFiles.add(staticFileConfig -> {
                 staticFileConfig.directory = "public";
@@ -77,17 +92,17 @@ public class App {
             });
         });
 
-        // 7. 注册全局拦截器
+        // 9. 注册全局拦截器
         app.before(new CorsHandler());
         new ExceptionHandler().register(app);
 
-        // 8. 注册路由
+        // 10. 注册路由
         new WorkExperienceRoutes(workExpService).register(app);
         new CvTemplateRoutes(templateService).register(app);
         new JobDescriptionRoutes(jdService).register(app);
         new CvGenerationRoutes(cvGenService, exportService, config, promptConfig).register(app);
 
-        // 9. SPA 回退：404 时返回 index.html
+        // 11. SPA 回退：404 时返回 index.html
         app.error(404, ctx -> {
             if (!ctx.path().startsWith("/api")) {
                 ctx.contentType("text/html; charset=UTF-8");
@@ -99,14 +114,14 @@ public class App {
             }
         });
 
-        // 9. 注册关闭钩子
+        // 12. 注册关闭钩子
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log.info("CVAgent 关闭中...");
             app.stop();
             DataSourceConfig.shutdown();
         }));
 
-        // 10. 启动服务器
+        // 13. 启动服务器
         app.start(config.getServerPort());
         log.info("CVAgent 启动完成: http://localhost:{}", config.getServerPort());
     }

@@ -32,7 +32,7 @@ public interface CvTailorAgent {
     @UserMessage("{{tailorUserPrompt}}")
     String tailorCv(
             @V("cv") String cv,
-            @V("cvReview") String cvReview,
+            @V("cvReviewText") String cvReviewText,
             @V("tailorSystemPrompt") String tailorSystemPrompt,
             @V("tailorUserPrompt") String tailorUserPrompt
     );

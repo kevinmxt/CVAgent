@@ -371,10 +371,48 @@ public class AppConfig {
     /**
      * 根据当前 dbMode 获取对应的 JDBC URL。
      *
+     * <p>H2 模式下会将相对路径解析为绝对路径，确保从不同工作目录启动时
+     * 始终使用同一数据库文件，避免数据"丢失"。</p>
+     *
      * @return JDBC URL
      */
     public String getEffectiveJdbcUrl() {
-        return "mysql".equalsIgnoreCase(dbMode) ? mysqlUrl : h2Url;
+        if ("mysql".equalsIgnoreCase(dbMode)) {
+            return mysqlUrl;
+        }
+        return resolveDataPath(h2Url);
+    }
+
+    /**
+     * 将 H2 JDBC URL 中的相对路径解析为绝对路径。
+     *
+     * <p>优先级：环境变量 CV_DATA_DIR → JAR 同级目录 → user.dir 绝对路径</p>
+     */
+    private String resolveDataPath(String url) {
+        String dataDir = System.getenv("CV_DATA_DIR");
+        if (dataDir != null && !dataDir.isEmpty()) {
+            return url.replace("./data/cvagent", dataDir.replace('\\', '/'));
+        }
+        if (!url.contains("./data/")) {
+            return url;
+        }
+        // 解析为 JAR/classpath 所在目录，使数据库与 JAR 放在一起
+        try {
+            java.net.URI uri = AppConfig.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI();
+            File jarOrDir = new File(uri);
+            // 如果是 JAR 文件，取其父目录；如果是 class 目录，取其上级的上级
+            File baseDir = jarOrDir.isFile() ? jarOrDir.getParentFile() : jarOrDir;
+            if (baseDir != null) {
+                String absPath = new File(baseDir, "data/cvagent").getAbsolutePath();
+                return url.replace("./data/cvagent", absPath.replace('\\', '/'));
+            }
+        } catch (Exception ignored) {
+            // URL/URI 解析失败时回退
+        }
+        // 最终回退：user.dir 的绝对路径
+        String absPath = new File(System.getProperty("user.dir"), "data/cvagent").getAbsolutePath();
+        return url.replace("./data/cvagent", absPath.replace('\\', '/'));
     }
 
     /**

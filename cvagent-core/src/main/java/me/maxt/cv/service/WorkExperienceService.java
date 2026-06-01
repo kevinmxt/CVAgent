@@ -1,5 +1,8 @@
 package me.maxt.cv.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.ChatModel;
 import me.maxt.cv.common.error.AppException;
 import me.maxt.cv.common.error.ErrorCode;
 import me.maxt.cv.common.util.FileImportUtil;
@@ -23,8 +26,10 @@ import java.util.List;
 public class WorkExperienceService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkExperienceService.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final WorkExperienceRepository repository;
+    private ChatModel chatModel;
 
     /**
      * 构造工作经历服务。
@@ -33,6 +38,15 @@ public class WorkExperienceService {
      */
     public WorkExperienceService(WorkExperienceRepository repository) {
         this.repository = repository;
+    }
+
+    /**
+     * 设置 AI 模型，用于智能解析简历字段。
+     *
+     * @param chatModel LLM 对话模型
+     */
+    public void setChatModel(ChatModel chatModel) {
+        this.chatModel = chatModel;
     }
 
     /**
@@ -151,17 +165,79 @@ public class WorkExperienceService {
     }
 
     /**
-     * 解析文本内容并填充到实体的各字段中。
+     * 使用 AI 解析文本内容并填充到实体的各字段中。
      *
-     * <p>简单地将完整内容赋值给 professionalExp 字段作为主要工作经历。
-     * 后续可扩展为更精细的 AI 辅助解析。</p>
+     * <p>如果未配置 ChatModel 则回退到简单模式（仅填充 professionalExp）。</p>
      *
      * @param entity  工作经历实体
      * @param content 原始文本内容
      */
     private void parseContentToFields(WorkExperience entity, String content) {
-        // 简化处理：将原始内容作为专业经历存储
-        entity.setProfessionalExp(content);
-        // email、skills、education 等字段暂时留空，后续可通过 AI 解析填充
+        if (chatModel == null) {
+            log.warn("未配置 ChatModel，使用简单解析模式");
+            entity.setProfessionalExp(content);
+            return;
+        }
+
+        try {
+            String prompt = buildExtractionPrompt(content);
+            String response = chatModel.chat(prompt);
+            JsonNode json = MAPPER.readTree(extractJson(response));
+            applyExtractedFields(entity, json);
+            log.info("AI 解析完成: email={}, phone={}",
+                    entity.getPersonEmail(), entity.getPersonPhone());
+        } catch (Exception e) {
+            log.warn("AI 解析失败，回退到简单模式: {}", e.getMessage());
+            entity.setProfessionalExp(content);
+        }
+    }
+
+    private String buildExtractionPrompt(String content) {
+        return """
+                You are a resume parser. Extract the following fields from the resume text below.
+                Return ONLY valid JSON, no explanation.
+
+                {
+                  "personEmail": "email address or null",
+                  "personPhone": "phone number or null",
+                  "summary": "brief self-introduction/summary paragraph or null",
+                  "skills": "comma-separated skills list or null",
+                  "professionalExp": "full work experience section text",
+                  "education": "education background section text or null"
+                }
+
+                Resume text:
+                """ + content;
+    }
+
+    private String extractJson(String response) {
+        // 提取 JSON 块（处理 LLM 可能在 JSON 前后加 markdown 代码块标记的情况）
+        int start = response.indexOf('{');
+        int end = response.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return response.substring(start, end + 1);
+        }
+        return response;
+    }
+
+    private void applyExtractedFields(WorkExperience entity, JsonNode json) {
+        if (json.has("personEmail") && !json.get("personEmail").isNull()) {
+            entity.setPersonEmail(json.get("personEmail").asText());
+        }
+        if (json.has("personPhone") && !json.get("personPhone").isNull()) {
+            entity.setPersonPhone(json.get("personPhone").asText());
+        }
+        if (json.has("summary") && !json.get("summary").isNull()) {
+            entity.setSummary(json.get("summary").asText());
+        }
+        if (json.has("skills") && !json.get("skills").isNull()) {
+            entity.setSkills(json.get("skills").asText());
+        }
+        if (json.has("professionalExp") && !json.get("professionalExp").isNull()) {
+            entity.setProfessionalExp(json.get("professionalExp").asText());
+        }
+        if (json.has("education") && !json.get("education").isNull()) {
+            entity.setEducation(json.get("education").asText());
+        }
     }
 }
