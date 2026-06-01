@@ -71,6 +71,10 @@ public class App {
         // 6. 创建 Javalin 实例
         Javalin app = Javalin.create(javalinConfig -> {
             javalinConfig.http.defaultContentType = "application/json; charset=UTF-8";
+            javalinConfig.staticFiles.add(staticFileConfig -> {
+                staticFileConfig.directory = "public";
+                staticFileConfig.location = io.javalin.http.staticfiles.Location.CLASSPATH;
+            });
         });
 
         // 7. 注册全局拦截器
@@ -82,6 +86,18 @@ public class App {
         new CvTemplateRoutes(templateService).register(app);
         new JobDescriptionRoutes(jdService).register(app);
         new CvGenerationRoutes(cvGenService, exportService, config, promptConfig).register(app);
+
+        // 9. SPA 回退：404 时返回 index.html
+        app.error(404, ctx -> {
+            if (!ctx.path().startsWith("/api")) {
+                ctx.contentType("text/html; charset=UTF-8");
+                try (var stream = App.class.getClassLoader().getResourceAsStream("public/index.html")) {
+                    if (stream != null) {
+                        ctx.result(stream);
+                    }
+                }
+            }
+        });
 
         // 9. 注册关闭钩子
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

@@ -41,3 +41,9 @@ data/
 
 ### Mac OS ###
 .DS_Store
+
+### Frontend ###
+node_modules/
+cvagent-web/src/main/resources/public/
+dependency-reduced-pom.xml
+*.tsbuildinfo

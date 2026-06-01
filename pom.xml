@@ -45,6 +45,9 @@
     <!-- 插件版本 -->
     <compiler-plugin.version>3.11.0</compiler-plugin.version>
     <surefire-plugin.version>3.1.2</surefire-plugin.version>
+
+    <!-- 前端构建 -->
+    <skip.frontend>false</skip.frontend>
   </properties>
 
   <dependencyManagement>
