@@ -114,6 +114,9 @@ public class CvGenerationOrchestrator {
                             multiReview
                     ));
 
+                    // 将合并后的反馈写入 scope，供下一轮 tailor 使用
+                    scope.writeState("cvReviewText", multiReview.getCombinedFeedback());
+
                     log.info("第 {} 轮评审: overallScore={}, passScore={}",
                             iterationHistory.size(), multiReview.getOverallScore(),
                             promptConfig.getPassScore());
@@ -125,10 +128,12 @@ public class CvGenerationOrchestrator {
 
         // 调用循环 Agent
         try {
-            Map<String, Object> arguments = Map.of(
-                    "cv", initialCv,
-                    "jobDescription", jobDescription
-            );
+            Map<String, Object> arguments = new LinkedHashMap<>();
+            arguments.put("cv", initialCv);
+            arguments.put("jobDescription", jobDescription);
+            arguments.put("cvReviewText", "");
+            arguments.put("tailorSystemPrompt", tailorConfig.getSystemPrompt());
+            arguments.put("tailorUserPrompt", tailorConfig.getUserPrompt());
             @SuppressWarnings("unchecked")
             Map<String, Object> result = (Map<String, Object>) loopAgent.invoke(arguments);
 
