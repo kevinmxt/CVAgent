@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 数据库配置管理，负责根据配置创建数据源并在启动时初始化表结构。
@@ -79,7 +81,8 @@ public class DatabaseConfig {
     /**
      * 执行类路径下的 SQL 脚本文件。
      *
-     * <p>脚本以分号分隔多条 SQL 语句，逐条执行。</p>
+     * <p>H2 模式使用内置 RunScript 正确解析 SQL（支持字符串内分号），
+     * MySQL 模式使用状态机按分号分隔。</p>
      *
      * @param jdbcUrl      JDBC 连接 URL
      * @param username     用户名
@@ -88,31 +91,84 @@ public class DatabaseConfig {
      */
     private void executeSqlScript(String jdbcUrl, String username, String password, String scriptPath) {
         try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password)) {
-            // 读取脚本内容
-            String sql = new String(
-                    getClass().getClassLoader().getResourceAsStream(scriptPath).readAllBytes(),
-                    java.nio.charset.StandardCharsets.UTF_8
-            );
-
-            // 按分号分割并逐条执行，跳过空语句和纯注释行
-            try (Statement stmt = conn.createStatement()) {
-                for (String statement : sql.split(";")) {
-                    String trimmed = statement.trim();
-                    if (trimmed.isEmpty() || trimmed.startsWith("--")) {
-                        continue;
-                    }
-                    try {
-                        stmt.execute(trimmed);
-                    } catch (Exception e) {
-                        // 表已存在等错误不中断
-                        log.debug("SQL 执行跳过（可能已存在）: {}", e.getMessage());
+            if ("h2".equalsIgnoreCase(config.getDbMode())) {
+                java.io.InputStream is = getClass().getClassLoader().getResourceAsStream(scriptPath);
+                if (is == null) {
+                    throw new AppException(ErrorCode.CONFIG_ERROR, "找不到 SQL 脚本: " + scriptPath);
+                }
+                org.h2.tools.RunScript.execute(conn,
+                        new java.io.InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8));
+            } else {
+                String sql = new String(
+                        getClass().getClassLoader().getResourceAsStream(scriptPath).readAllBytes(),
+                        java.nio.charset.StandardCharsets.UTF_8
+                );
+                try (Statement stmt = conn.createStatement()) {
+                    for (String statement : splitSqlStatements(sql)) {
+                        String trimmed = statement.trim();
+                        if (trimmed.isEmpty() || trimmed.startsWith("--")) {
+                            continue;
+                        }
+                        try {
+                            stmt.execute(trimmed);
+                        } catch (Exception e) {
+                            log.debug("SQL 执行跳过（可能已存在）: {}", e.getMessage());
+                        }
                     }
                 }
             }
+        } catch (AppException e) {
+            throw e;
         } catch (Exception e) {
             log.error("执行 SQL 脚本失败: {}", scriptPath, e);
             throw new AppException(ErrorCode.DATABASE_ERROR, e);
         }
+    }
+
+    /**
+     * 按分号拆分 SQL 语句，正确处理单引号字符串字面量内的分号。
+     *
+     * <p>状态机在遇到未转义的单引号时切换字符串内/外状态，
+     * 仅在字符串外部遇到分号时才拆分为独立语句。</p>
+     *
+     * @param sql 原始 SQL 脚本
+     * @return 拆分后的 SQL 语句列表
+     */
+    static List<String> splitSqlStatements(String sql) {
+        List<String> statements = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inString = false;
+
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+
+            if (c == '\'' && !inString) {
+                inString = true;
+            } else if (c == '\'' && inString) {
+                // 检查是否为转义引号 ''
+                if (i + 1 < sql.length() && sql.charAt(i + 1) == '\'') {
+                    current.append(c);
+                    current.append(sql.charAt(i + 1));
+                    i++;
+                    continue;
+                }
+                inString = false;
+            }
+
+            if (c == ';' && !inString) {
+                statements.add(current.toString());
+                current = new StringBuilder();
+            } else {
+                current.append(c);
+            }
+        }
+
+        String remaining = current.toString().trim();
+        if (!remaining.isEmpty()) {
+            statements.add(remaining);
+        }
+
+        return statements;
     }
 
     /**
