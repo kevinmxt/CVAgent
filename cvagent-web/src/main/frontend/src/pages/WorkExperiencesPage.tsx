@@ -43,6 +43,7 @@ export default function WorkExperiencesPage() {
       skills: item.skills,
       professionalExp: item.professionalExp,
       education: item.education,
+      otherInfo: item.otherInfo,
     });
   };
 
@@ -158,6 +159,10 @@ export default function WorkExperiencesPage() {
           <div className="form-group">
             <label className="form-label">教育背景</label>
             <textarea className="form-textarea" rows={3} value={editForm.education || ''} onChange={(e) => setEditForm({ ...editForm, education: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">其他信息</label>
+            <textarea className="form-textarea" rows={3} value={editForm.otherInfo || ''} onChange={(e) => setEditForm({ ...editForm, otherInfo: e.target.value })} />
           </div>
         </div>
       </Modal>

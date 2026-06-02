@@ -134,6 +134,7 @@ public class WorkExperienceService {
         if (update.getSkills() != null) existing.setSkills(update.getSkills());
         if (update.getProfessionalExp() != null) existing.setProfessionalExp(update.getProfessionalExp());
         if (update.getEducation() != null) existing.setEducation(update.getEducation());
+        if (update.getOtherInfo() != null) existing.setOtherInfo(update.getOtherInfo());
 
         log.info("更新工作经历: id={}", id);
         return repository.update(existing);
@@ -176,12 +177,18 @@ public class WorkExperienceService {
         if (chatModel == null) {
             log.warn("未配置 ChatModel，使用简单解析模式");
             entity.setProfessionalExp(content);
+            entity.setSummary("");
+            entity.setEducation("");
+            entity.setSkills("");
             return;
         }
 
         try {
             String prompt = buildExtractionPrompt(content);
             String response = chatModel.chat(prompt);
+            if (response == null) {
+                throw new AppException(ErrorCode.AGENT_EXECUTION_FAILED, "AI 模型返回为空，请检查 API 配置");
+            }
             JsonNode json = MAPPER.readTree(extractJson(response));
             applyExtractedFields(entity, json);
             log.info("AI 解析完成: email={}, phone={}",
@@ -189,6 +196,9 @@ public class WorkExperienceService {
         } catch (Exception e) {
             log.warn("AI 解析失败，回退到简单模式: {}", e.getMessage());
             entity.setProfessionalExp(content);
+            entity.setSummary("");
+            entity.setEducation("");
+            entity.setSkills("");
         }
     }
 
@@ -203,7 +213,8 @@ public class WorkExperienceService {
                   "summary": "brief self-introduction/summary paragraph or null",
                   "skills": "comma-separated skills list or null",
                   "professionalExp": "full work experience section text",
-                  "education": "education background section text or null"
+                  "education": "education background section text or null",
+                  "otherInfo": "any resume content that does not fit the above fields (certifications, languages, hobbies, projects, publications, volunteer work, or any custom sections), or null if everything was captured"
                 }
 
                 Resume text:
@@ -238,6 +249,9 @@ public class WorkExperienceService {
         }
         if (json.has("education") && !json.get("education").isNull()) {
             entity.setEducation(json.get("education").asText());
+        }
+        if (json.has("otherInfo") && !json.get("otherInfo").isNull()) {
+            entity.setOtherInfo(json.get("otherInfo").asText());
         }
     }
 }

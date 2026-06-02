@@ -5,7 +5,7 @@
     "baseUrl": "https://api.deepseek.com",
     "modelName": "deepseek-v4-flash",
     "temperature": 0.7,
-    "maxTokens": 4096,
+    "maxTokens": 393216,
     "timeoutSeconds": 120
   },
   "database": {

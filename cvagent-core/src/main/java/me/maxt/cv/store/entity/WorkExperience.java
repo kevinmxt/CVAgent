@@ -29,6 +29,8 @@ public class WorkExperience {
     private String professionalExp;
     /** 教育背景（Markdown 或自由文本格式） */
     private String education;
+    /** 其他信息（AI未能归类的内容，如证书、语言、项目等） */
+    private String otherInfo;
     /** 导入时的原始文件名 */
     private String rawFileName;
     /** 原始文件类型（txt / docx / pdf / html） */
@@ -63,6 +65,9 @@ public class WorkExperience {
 
     public String getEducation() { return education; }
     public void setEducation(String education) { this.education = education; }
+
+    public String getOtherInfo() { return otherInfo; }
+    public void setOtherInfo(String otherInfo) { this.otherInfo = otherInfo; }
 
     public String getRawFileName() { return rawFileName; }
     public void setRawFileName(String rawFileName) { this.rawFileName = rawFileName; }

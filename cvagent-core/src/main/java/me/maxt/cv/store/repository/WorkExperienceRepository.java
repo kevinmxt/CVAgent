@@ -44,13 +44,13 @@ public class WorkExperienceRepository {
                 .columns(
                         field("PERSON_NAME"), field("PERSON_EMAIL"), field("PERSON_PHONE"),
                         field("SUMMARY"), field("SKILLS"), field("PROFESSIONAL_EXP"),
-                        field("EDUCATION"), field("RAW_FILE_NAME"), field("RAW_FILE_TYPE"),
+                        field("EDUCATION"), field("OTHER_INFO"), field("RAW_FILE_NAME"), field("RAW_FILE_TYPE"),
                         field("RAW_CONTENT"), field("CREATED_AT"), field("UPDATED_AT")
                 )
                 .values(
                         entity.getPersonName(), entity.getPersonEmail(), entity.getPersonPhone(),
                         entity.getSummary(), entity.getSkills(), entity.getProfessionalExp(),
-                        entity.getEducation(), entity.getRawFileName(), entity.getRawFileType(),
+                        entity.getEducation(), entity.getOtherInfo(), entity.getRawFileName(), entity.getRawFileType(),
                         entity.getRawContent(), entity.getCreatedAt(), entity.getUpdatedAt()
                 )
                 .returning(field("ID"))
@@ -121,6 +121,7 @@ public class WorkExperienceRepository {
                 .set(field("SKILLS"), entity.getSkills())
                 .set(field("PROFESSIONAL_EXP"), entity.getProfessionalExp())
                 .set(field("EDUCATION"), entity.getEducation())
+                .set(field("OTHER_INFO"), entity.getOtherInfo())
                 .set(field("UPDATED_AT"), entity.getUpdatedAt())
                 .where(field("ID").eq(entity.getId()))
                 .execute();
@@ -157,6 +158,7 @@ public class WorkExperienceRepository {
         entity.setSkills(record.get(field("SKILLS", String.class)));
         entity.setProfessionalExp(record.get(field("PROFESSIONAL_EXP", String.class)));
         entity.setEducation(record.get(field("EDUCATION", String.class)));
+        entity.setOtherInfo(record.get(field("OTHER_INFO", String.class)));
         entity.setRawFileName(record.get(field("RAW_FILE_NAME", String.class)));
         entity.setRawFileType(record.get(field("RAW_FILE_TYPE", String.class)));
         entity.setRawContent(record.get(field("RAW_CONTENT", String.class)));

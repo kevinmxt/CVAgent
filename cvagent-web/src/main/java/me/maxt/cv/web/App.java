@@ -70,6 +70,7 @@ public class App {
         workExpService.setChatModel(chatModel);
         // 6. 创建 Service 实例（续）
         CvTemplateService templateService = new CvTemplateService(templateRepo);
+        templateService.setChatModel(chatModel);
         JobDescriptionService jdService = new JobDescriptionService(jdRepo);
         CvGenerationService cvGenService = new CvGenerationService(
                 workExpRepo, templateRepo, jdRepo, generatedCvRepo);

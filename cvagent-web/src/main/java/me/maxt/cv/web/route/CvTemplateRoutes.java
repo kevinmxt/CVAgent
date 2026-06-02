@@ -44,6 +44,7 @@ public class CvTemplateRoutes {
         app.get(PREFIX, this::handleList);
         app.get(PREFIX + "/{id}", this::handleGetById);
         app.post(PREFIX, this::handleCreate);
+        app.post(PREFIX + "/import", this::handleImport);
         app.put(PREFIX + "/{id}", this::handleUpdate);
         app.delete(PREFIX + "/{id}", this::handleDelete);
     }
@@ -92,6 +93,24 @@ public class CvTemplateRoutes {
         Long id = parseId(ctx);
         service.delete(id);
         ctx.status(204);
+    }
+
+    /**
+     * 处理从文件导入模板请求，使用 AI 自动生成 HTML 模板。
+     */
+    private void handleImport(Context ctx) {
+        var uploadedFile = ctx.uploadedFile("file");
+        if (uploadedFile == null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "请上传文件，字段名为 file");
+        }
+        try (var inputStream = uploadedFile.content()) {
+            CvTemplate result = service.importFromFile(inputStream, uploadedFile.filename());
+            ctx.status(201);
+            ctx.json(result);
+        } catch (java.io.IOException e) {
+            log.error("文件读取失败", e);
+            throw new AppException(ErrorCode.FILE_OPERATION_ERROR, e);
+        }
     }
 
     private Long parseId(Context ctx) {

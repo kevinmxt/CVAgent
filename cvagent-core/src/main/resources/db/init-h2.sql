@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS work_experience (
     skills           TEXT          NULL COMMENT '技能列表',
     professional_exp TEXT          NULL COMMENT '工作经历',
     education        TEXT          NULL COMMENT '教育背景',
+    other_info       TEXT          NULL COMMENT '其他信息（AI未能归类的内容）',
     raw_file_name    VARCHAR(255)  NULL COMMENT '导入时的原始文件名',
     raw_file_type    VARCHAR(20)   NULL COMMENT '原始文件类型（txt/docx/pdf/html）',
     raw_content      CLOB          NULL COMMENT '导入的原始文本内容',
@@ -81,3 +82,6 @@ CREATE INDEX IF NOT EXISTS idx_cv_template_preset ON cv_template(is_preset);
 CREATE INDEX IF NOT EXISTS idx_jd_title ON job_description(title);
 CREATE INDEX IF NOT EXISTS idx_gen_cv_status ON generated_cv(status);
 CREATE INDEX IF NOT EXISTS idx_gen_record_cv_id ON cv_generation_record(generated_cv_id);
+
+-- 迁移：为已有数据库添加 other_info 列
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS other_info TEXT NULL;

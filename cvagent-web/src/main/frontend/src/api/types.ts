@@ -9,6 +9,7 @@ export interface WorkExperience {
   skills: string;
   professionalExp: string;
   education: string;
+  otherInfo: string;
   rawFileName: string;
   rawFileType: string;
   rawContent: string;

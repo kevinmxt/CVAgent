@@ -216,6 +216,10 @@ public class CvGenerationOrchestrator {
         // 计算加权综合评分
         double overallScore = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
 
+        if (totalWeight > 0 && overallScore < 0.01) {
+            log.warn("所有评审角色评分均为 0，请检查 AI 模型返回的评分格式是否正常");
+        }
+
         MultiRoleReviewResult multiResult = new MultiRoleReviewResult(
                 roleResults, overallScore, combinedFeedback.toString().trim());
 

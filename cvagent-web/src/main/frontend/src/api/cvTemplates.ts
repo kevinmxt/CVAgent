@@ -1,4 +1,4 @@
-import { request } from './client';
+import { request, uploadFile } from './client';
 import type { CvTemplate } from './types';
 
 const BASE = '/cv-templates';
@@ -27,4 +27,8 @@ export function updateTemplate(id: number, data: Partial<CvTemplate>): Promise<C
 
 export function deleteTemplate(id: number): Promise<void> {
   return request<void>(`${BASE}/${id}`, { method: 'DELETE' });
+}
+
+export function importTemplate(file: File): Promise<CvTemplate> {
+  return uploadFile<CvTemplate>(`${BASE}/import`, file);
 }

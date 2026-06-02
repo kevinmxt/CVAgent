@@ -33,5 +33,10 @@ export function useCvTemplates() {
     fetch();
   }, [fetch]);
 
-  return { templates, loading, error, refetch: fetch, create, update, remove };
+  const importFile = useCallback(async (file: File) => {
+    await api.importTemplate(file);
+    fetch();
+  }, [fetch]);
+
+  return { templates, loading, error, refetch: fetch, create, update, remove, importFile };
 }

@@ -85,6 +85,17 @@ public class CvGenerationRoutes {
         CvGenerationService.GenerationContext context = cvGenService.loadContext(
                 request.getWorkExpId(), request.getTemplateId(), request.getJdId());
 
+        // 验证工作经历是否有足够的内容
+        var workExp = context.getWorkExperience();
+        boolean hasContent = (workExp.getProfessionalExp() != null && !workExp.getProfessionalExp().isEmpty())
+                || (workExp.getSummary() != null && !workExp.getSummary().isEmpty())
+                || (workExp.getSkills() != null && !workExp.getSkills().isEmpty())
+                || (workExp.getEducation() != null && !workExp.getEducation().isEmpty());
+        if (!hasContent) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "该工作经历缺少有效内容，请重新导入简历文件或手动编辑补充内容后再生成");
+        }
+
         // 2. 填充模板生成初始 HTML 简历
         String initialCv = cvGenService.fillTemplate(
                 context.getWorkExperience(), context.getTemplate());
