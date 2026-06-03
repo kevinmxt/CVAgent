@@ -74,6 +74,8 @@ public class App {
         JobDescriptionService jdService = new JobDescriptionService(jdRepo);
         CvGenerationService cvGenService = new CvGenerationService(
                 workExpRepo, templateRepo, jdRepo, generatedCvRepo);
+        cvGenService.setChatModel(chatModel);
+        cvGenService.setMaxRawContentLength(config.getMaxTokens());
         ExportService exportService = new ExportService();
 
         // 7. 创建 Agent 相关配置

@@ -182,12 +182,19 @@ public class CvGenerationOrchestrator {
                         .outputKey("cvReview_" + roleKey)
                         .build();
 
+                // 预解析 systemPrompt/userPrompt 中的嵌套占位符
+                // LangChain4j 只做单层模板替换，不会递归解析已替换内容中的 {{...}}
+                String resolvedSystemPrompt = roleConfig.getSystemPrompt()
+                        .replace("{{jobDescription}}", jobDescription);
+                String resolvedUserPrompt = roleConfig.getUserPrompt()
+                        .replace("{{cv}}", cv);
+
                 CvReviewResult result = roleAgent.reviewCv(
                         cv,
                         jobDescription,
                         roleConfig.getDescription(),
-                        roleConfig.getSystemPrompt(),
-                        roleConfig.getUserPrompt()
+                        resolvedSystemPrompt,
+                        resolvedUserPrompt
                 );
 
                 result.setRoleName(roleConfig.getName());
@@ -241,11 +248,17 @@ public class CvGenerationOrchestrator {
                     .outputKey("cv")
                     .build();
 
+            // 预解析 tailor prompt 中的嵌套占位符
+            String resolvedTailorSystemPrompt = tailorConfig.getSystemPrompt()
+                    .replace("{{cv}}", cv);
+            String resolvedTailorUserPrompt = tailorConfig.getUserPrompt()
+                    .replace("{{cvReview}}", combinedReview);
+
             String tailored = tailor.tailorCv(
                     cv,
                     combinedReview,
-                    tailorConfig.getSystemPrompt(),
-                    tailorConfig.getUserPrompt()
+                    resolvedTailorSystemPrompt,
+                    resolvedTailorUserPrompt
             );
             log.info("简历优化完成: inputLength={}, outputLength={}", cv.length(), tailored.length());
             return tailored;

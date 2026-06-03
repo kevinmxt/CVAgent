@@ -165,6 +165,32 @@ public class CvTemplateService {
     }
 
     private String buildTemplateGenerationPrompt(String content) {
+        boolean isHtml = content.contains("<!DOCTYPE") || content.contains("<html");
+
+        if (isHtml) {
+            return """
+                    你是一个专业的简历 HTML 模板设计师。
+
+                    请根据以下 HTML 简历代码，将其转换为可复用的模板。
+
+                    要求：
+                    1. 保留原始 HTML 的完整结构和 CSS 样式（布局、字体、颜色、间距等），只修改内容部分
+                    2. 将实际个人信息替换为以下占位符,注意不要重复,多个相同部分合并：
+                       - {{person_name}} 替换真实姓名
+                       - {{person_email}} 替换邮箱
+                       - {{person_phone}} 替换电话
+                       - {{summary}} 替换个人简介
+                       - {{professional_exp}} 替换工作经历
+                       - {{education}} 替换教育背景
+                       - {{skills}} 替换技能列表
+                    3. 对于其他内容区域（如证书、语言、项目等），保留其原始章节标题或是属性名称，并将属性内容替换为 {{以下划线分隔的属性名占位符}} 占位符,例如:{{sex}},{{salary_expect}}
+                    4. 输出必须是完整的 HTML 文档，保持原有的 DOCTYPE、meta 标签和 style 标签
+                    5. 不要包含任何解释性文字，只输出 HTML 代码
+
+                    原始 HTML 简历：
+                    """ + content;
+        }
+
         return """
                 你是一个专业的简历 HTML 模板设计师。
 
@@ -172,7 +198,7 @@ public class CvTemplateService {
 
                 要求：
                 1. 分析文本内容的结构，识别出以下信息区域：个人信息（姓名、邮箱、电话）、个人简介、工作经历、教育背景、技能列表，以及任何其他区域（如证书、语言、项目、爱好等）
-                2. 将实际个人信息替换为以下占位符（保留原始布局和样式）：
+                2. 将实际个人信息替换为以下占位符（保留原始布局和样式）,注意不要重复,多个相同部分合并：
                    - {{person_name}} 替换真实姓名
                    - {{person_email}} 替换邮箱
                    - {{person_phone}} 替换电话
@@ -180,7 +206,7 @@ public class CvTemplateService {
                    - {{professional_exp}} 替换工作经历
                    - {{education}} 替换教育背景
                    - {{skills}} 替换技能列表
-                3. 对于其他未在上述列表中的内容区域（如证书、语言、项目等），保留其原始章节标题，并将内容替换为 {{other_info}} 占位符
+                3. 对于其他未在上述列表中的内容区域（如证书、语言、项目等），保留其原始章节标题或是属性名称，并将属性内容替换为 {{以下划线分隔的属性名占位符}} 占位符,例如:{{sex}},{{salary_expect}}
                 4. 设计专业的 CSS 样式（使用 style 标签内嵌），包含：
                    - 整洁的布局
                    - 合适的字体、间距、颜色

@@ -65,9 +65,9 @@ public class FileImportUtil {
                 throw new AppException(ErrorCode.FILE_TOO_LARGE);
             }
 
-            // 对于纯文本文件，直接用 UTF-8 读取，避免 Tika 的额外开销
-            if (isPlainText(fileName)) {
-                log.info("解析纯文本文件: {}", fileName);
+            // 对于文本格式文件（txt/html），直接用 UTF-8 读取，避免 Tika 剥离 HTML 标签
+            if (isRawText(fileName)) {
+                log.info("直接读取文本文件: {}", fileName);
                 return new String(bytes, StandardCharsets.UTF_8);
             }
 
@@ -115,16 +115,16 @@ public class FileImportUtil {
     }
 
     /**
-     * 判断是否为纯文本文件（txt 格式）。
+     * 判断是否为文本格式文件（txt、html），这些文件应直接 UTF-8 读取而非通过 Tika 解析。
      *
      * @param fileName 文件名
-     * @return true 表示纯文本
+     * @return true 表示文本格式
      */
-    private static boolean isPlainText(String fileName) {
+    private static boolean isRawText(String fileName) {
         if (fileName == null) {
             return false;
         }
         String lower = fileName.toLowerCase();
-        return lower.endsWith(".txt");
+        return lower.endsWith(".txt") || lower.endsWith(".html") || lower.endsWith(".htm");
     }
 }

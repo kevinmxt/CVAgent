@@ -2,6 +2,7 @@ package me.maxt.cv.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.model.chat.ChatModel;
 import me.maxt.cv.common.error.AppException;
 import me.maxt.cv.common.error.ErrorCode;
 import me.maxt.cv.store.entity.CvGenerationRecord;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * 简历生成业务服务，负责编排 Agent 生成流程并管理生成结果。
@@ -39,11 +41,14 @@ public class CvGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(CvGenerationService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{(\\w+)\\}\\}");
 
     private final WorkExperienceRepository workExpRepo;
     private final CvTemplateRepository templateRepo;
     private final JobDescriptionRepository jdRepo;
     private final GeneratedCvRepository generatedCvRepo;
+    private ChatModel chatModel;
+    private int maxRawContentLength = 8000;
 
     /**
      * 构造简历生成服务。
@@ -64,6 +69,24 @@ public class CvGenerationService {
     }
 
     /**
+     * 设置 AI 模型，用于智能填充模板中未匹配的占位符。
+     *
+     * @param chatModel LLM 对话模型
+     */
+    public void setChatModel(ChatModel chatModel) {
+        this.chatModel = chatModel;
+    }
+
+    /**
+     * 设置 AI 智能填充时原始内容的最大字符数，从 maxTokens 配置推导。
+     *
+     * @param maxRawContentLength 最大字符数
+     */
+    public void setMaxRawContentLength(int maxRawContentLength) {
+        this.maxRawContentLength = maxRawContentLength;
+    }
+
+    /**
      * 将工作经历数据填充到 HTML 模板中，生成初始简历。
      *
      * <p>替换模板中的占位符：{{person_name}}、{{person_email}}、
@@ -79,7 +102,7 @@ public class CvGenerationService {
 
         String html = template.getTemplateContent();
 
-        // 替换占位符，null 值替换为空字符串
+        // 替换已知占位符，null 值替换为空字符串
         html = replacePlaceholder(html, "person_name", workExperience.getPersonName());
         html = replacePlaceholder(html, "person_email", workExperience.getPersonEmail());
         html = replacePlaceholder(html, "person_phone", workExperience.getPersonPhone());
@@ -87,6 +110,14 @@ public class CvGenerationService {
         html = replacePlaceholder(html, "professional_exp", workExperience.getProfessionalExp());
         html = replacePlaceholder(html, "education", workExperience.getEducation());
         html = replacePlaceholder(html, "skills", workExperience.getSkills());
+        html = replacePlaceholder(html, "other_info", workExperience.getOtherInfo());
+
+        // AI 智能填充：检测并处理已知字段未覆盖的占位符
+        String rawContent = workExperience.getRawContent();
+        if (chatModel != null && rawContent != null && !rawContent.isBlank()
+                && hasUnresolvedPlaceholders(html)) {
+            html = aiSmartFill(html, rawContent);
+        }
 
         return html;
     }
@@ -234,6 +265,86 @@ public class CvGenerationService {
         String placeholder = "{{" + key + "}}";
         String safeValue = (value != null) ? value : "";
         return html.replace(placeholder, safeValue);
+    }
+
+    /**
+     * 检测模板中是否还有未替换的占位符。
+     */
+    private boolean hasUnresolvedPlaceholders(String html) {
+        return PLACEHOLDER_PATTERN.matcher(html).find();
+    }
+
+    /**
+     * 使用 AI 从原始简历内容中提取信息，填充模板中尚未替换的占位符。
+     *
+     * <p>当模板包含自定义占位符（除 8 个已知字段外）时，此方法调用 LLM
+     * 根据 rawContent 智能匹配并填充。避免因固定字段不匹配导致内容丢失。</p>
+     *
+     * @param html       部分填充后的 HTML（可能含有未替换的占位符）
+     * @param rawContent 原始简历全文内容
+     * @return 填充完成的 HTML
+     */
+    private String aiSmartFill(String html, String rawContent) {
+        if (chatModel == null) {
+            return html;
+        }
+        try {
+            String prompt = """
+                    你是一个简历填充助手。以下是：
+                    1. 一份包含 {{占位符}} 的 HTML 简历模板（部分占位符已填充）
+                    2. 候选人的完整原始简历内容
+
+                    请将模板中所有剩余的 {{占位符}} 替换为原始简历中对应的信息。
+                    规则：
+                    - 从原始简历中智能匹配每个占位符对应的内容
+                    - 如果原始简历中确实没有对应信息，将占位符替换为空字符串
+                    - 保持 HTML 结构和 CSS 样式不变
+                    - 只输出完整的 HTML 代码，不要包含任何解释
+
+                    模板：
+                    """ + html + """
+
+                    原始简历内容：
+                    """ + truncateRawContent(rawContent);
+
+            String response = chatModel.chat(prompt);
+            if (response == null) {
+                log.warn("AI 智能填充返回为空，保留未填充的占位符");
+                return html;
+            }
+            return extractHtmlFromResponse(response);
+        } catch (Exception e) {
+            log.warn("AI 智能填充失败: {}", e.getMessage());
+            return html;
+        }
+    }
+
+    /**
+     * 从 AI 响应中提取 HTML 内容。
+     */
+    private String extractHtmlFromResponse(String response) {
+        int start = response.indexOf("<!DOCTYPE");
+        if (start < 0) start = response.indexOf("<html");
+        if (start >= 0) {
+            int end = response.lastIndexOf("</html>");
+            if (end > start) return response.substring(start, end + 7);
+        }
+        int codeStart = response.indexOf("```html");
+        if (codeStart >= 0) {
+            codeStart += 7;
+            int codeEnd = response.indexOf("```", codeStart);
+            if (codeEnd > codeStart) return response.substring(codeStart, codeEnd).trim();
+        }
+        return response;
+    }
+
+    /**
+     * 截断原始内容避免超出 AI 上下文限制。
+     */
+    private String truncateRawContent(String rawContent) {
+        if (rawContent == null) return "";
+        if (rawContent.length() <= maxRawContentLength) return rawContent;
+        return rawContent.substring(0, maxRawContentLength) + "\n...(内容已截断)";
     }
 
     /**
