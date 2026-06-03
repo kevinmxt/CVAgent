@@ -103,7 +103,7 @@ public class App {
         new WorkExperienceRoutes(workExpService).register(app);
         new CvTemplateRoutes(templateService).register(app);
         new JobDescriptionRoutes(jdService).register(app);
-        new CvGenerationRoutes(cvGenService, exportService, config, promptConfig).register(app);
+        new CvGenerationRoutes(cvGenService, exportService, config, promptConfig, jdRepo).register(app);
 
         // 11. SPA 回退：404 时返回 index.html
         app.error(404, ctx -> {

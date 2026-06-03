@@ -3,6 +3,7 @@ package me.maxt.cv.agent.orchestrator;
 import dev.langchain4j.agentic.AgenticServices;
 import dev.langchain4j.agentic.UntypedAgent;
 import dev.langchain4j.model.chat.ChatModel;
+import me.maxt.cv.agent.TokenLoggingChatModel;
 import me.maxt.cv.agent.dto.CvReviewResult;
 import me.maxt.cv.agent.dto.MultiRoleReviewResult;
 import me.maxt.cv.agent.reviewer.CvReviewerAgent;
@@ -189,6 +190,7 @@ public class CvGenerationOrchestrator {
                 String resolvedUserPrompt = roleConfig.getUserPrompt()
                         .replace("{{cv}}", cv);
 
+                TokenLoggingChatModel.setOperation("多角色评审-" + roleConfig.getName());
                 CvReviewResult result = roleAgent.reviewCv(
                         cv,
                         jobDescription,
@@ -254,6 +256,7 @@ public class CvGenerationOrchestrator {
             String resolvedTailorUserPrompt = tailorConfig.getUserPrompt()
                     .replace("{{cvReview}}", combinedReview);
 
+            TokenLoggingChatModel.setOperation("简历优化");
             String tailored = tailor.tailorCv(
                     cv,
                     combinedReview,

@@ -121,6 +121,7 @@ public class GeneratedCvRepository {
                 .set(field("FINAL_SCORE"), entity.getFinalScore())
                 .set(field("FINAL_FEEDBACK"), entity.getFinalFeedback())
                 .set(field("ROLE_SCORES"), entity.getRoleScores())
+                .set(field("ITERATION_COUNT"), entity.getIterationCount())
                 .set(field("STATUS"), entity.getStatus())
                 .set(field("UPDATED_AT"), entity.getUpdatedAt())
                 .where(field("ID").eq(entity.getId()))

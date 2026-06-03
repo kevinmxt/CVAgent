@@ -13,6 +13,7 @@ import me.maxt.cv.service.CvGenerationService;
 import me.maxt.cv.service.ExportService;
 import me.maxt.cv.store.entity.CvGenerationRecord;
 import me.maxt.cv.store.entity.GeneratedCv;
+import me.maxt.cv.store.repository.JobDescriptionRepository;
 import me.maxt.cv.web.dto.request.CvContentUpdateRequest;
 import me.maxt.cv.web.dto.request.CvGenerateRequest;
 import me.maxt.cv.web.dto.response.PageResult;
@@ -21,6 +22,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * CV 生成 REST 路由，负责映射 HTTP 端点并调用业务服务和 Agent 模块。
@@ -39,6 +42,12 @@ public class CvGenerationRoutes {
     private final ExportService exportService;
     private final AppConfig config;
     private final AgentPromptConfig promptConfig;
+    private final JobDescriptionRepository jdRepo;
+    private final ExecutorService scoreExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "cv-score-worker");
+        t.setDaemon(true);
+        return t;
+    });
 
     /**
      * 构造 CV 生成路由。
@@ -47,13 +56,16 @@ public class CvGenerationRoutes {
      * @param exportService 导出服务
      * @param config        应用配置
      * @param promptConfig  Agent 提示词配置
+     * @param jdRepo        岗位描述数据访问对象
      */
     public CvGenerationRoutes(CvGenerationService cvGenService, ExportService exportService,
-                               AppConfig config, AgentPromptConfig promptConfig) {
+                               AppConfig config, AgentPromptConfig promptConfig,
+                               JobDescriptionRepository jdRepo) {
         this.cvGenService = cvGenService;
         this.exportService = exportService;
         this.config = config;
         this.promptConfig = promptConfig;
+        this.jdRepo = jdRepo;
     }
 
     /**
@@ -62,7 +74,9 @@ public class CvGenerationRoutes {
      * @param app Javalin 实例
      */
     public void register(Javalin app) {
+        app.get(PREFIX, this::handleList);
         app.post(PREFIX + "/generate", this::handleGenerate);
+        app.post(PREFIX + "/{id}/score", this::handleScore);
         app.get(PREFIX + "/{id}", this::handleGetById);
         app.get(PREFIX + "/{id}/history", this::handleGetHistory);
         app.get(PREFIX + "/{id}/preview", this::handlePreview);
@@ -72,10 +86,20 @@ public class CvGenerationRoutes {
     }
 
     /**
-     * 处理简历生成请求。
+     * 分页查询所有生成的简历列表。
+     */
+    private void handleList(Context ctx) {
+        int page = parseIntParam(ctx, "page", 1);
+        int size = parseIntParam(ctx, "size", 10);
+        List<GeneratedCv> items = cvGenService.listGeneratedCvs(page, size);
+        int total = cvGenService.count();
+        ctx.json(new PageResult<>(items, page, size, total));
+    }
+
+    /**
+     * 处理简历生成请求（仅填模板保存，不执行评分循环）。
      *
-     * <p>接收 JSON body 指定关联的工作经历、模板和 JD 的 ID。
-     * 加载素材 → 填充模板 → 调用 Agent 生成 → 持久化结果。</p>
+     * <p>评分需要通过 {@code POST /{id}/score} 单独触发。</p>
      */
     private void handleGenerate(Context ctx) {
         CvGenerateRequest request = ctx.bodyAsClass(CvGenerateRequest.class);
@@ -100,47 +124,93 @@ public class CvGenerationRoutes {
         String initialCv = cvGenService.fillTemplate(
                 context.getWorkExperience(), context.getTemplate());
 
-        // 3. 调用 Agent 生成
-        CvGenerationOrchestrator orchestrator = new CvGenerationOrchestrator(
-                ChatModelProvider.createChatModel(config), promptConfig);
-
-        CvGenerationOrchestrator.CvGenerationResult agentResult =
-                orchestrator.generate(initialCv, context.getJobDescription().getContent());
-
-        // 4. 持久化生成结果
+        // 3. 持久化（无评分数据）
         GeneratedCv generatedCv = new GeneratedCv();
         generatedCv.setWorkExpId(request.getWorkExpId());
         generatedCv.setTemplateId(request.getTemplateId());
         generatedCv.setJdId(request.getJdId());
-        generatedCv.setFinalContent(agentResult.getFinalCv());
-        generatedCv.setFinalScore(agentResult.getFinalReview().getOverallScore());
-        generatedCv.setFinalFeedback(agentResult.getFinalReview().getCombinedFeedback());
-        generatedCv.setRoleScores(cvGenService.toRoleScoresJson(
-                agentResult.getFinalReview().getRoleResults()));
-        generatedCv.setIterationCount(agentResult.getIterationHistory().size());
+        generatedCv.setFinalContent(initialCv);
+        generatedCv.setFinalScore(null);
+        generatedCv.setFinalFeedback(null);
+        generatedCv.setRoleScores(null);
+        generatedCv.setIterationCount(0);
         generatedCv.setStatus(GeneratedCv.STATUS_DRAFT);
 
         GeneratedCv saved = cvGenService.saveGeneratedCv(generatedCv);
 
-        // 5. 持久化迭代记录
-        for (CvGenerationOrchestrator.IterationSnapshot snapshot : agentResult.getIterationHistory()) {
-            CvGenerationRecord record = new CvGenerationRecord();
-            record.setGeneratedCvId(saved.getId());
-            record.setIteration(snapshot.getIteration());
-            record.setRoleScores(cvGenService.toRoleScoresJson(
-                    snapshot.getReviewResult().getRoleResults()));
-            record.setOverallScore(snapshot.getReviewResult().getOverallScore());
-            record.setFeedback(snapshot.getReviewResult().getCombinedFeedback());
-            // 这里简化处理，迭代快照的 CV 不做单独存储（因 Agent 中间态不便获取）
-            record.setCvSnapshot(saved.getFinalContent());
-            cvGenService.saveIterationRecord(record);
-        }
-
-        log.info("CV 生成完成: id={}, score={}, iterations={}",
-                saved.getId(), saved.getFinalScore(), saved.getIterationCount());
+        log.info("CV 生成完成（待评分）: id={}", saved.getId());
 
         ctx.status(HttpStatus.CREATED);
         ctx.json(saved);
+    }
+
+    /**
+     * 异步评分：将状态设为 SCORING，后台线程执行评分循环，完成后回写结果。
+     */
+    private void handleScore(Context ctx) {
+        Long id = parseId(ctx);
+        GeneratedCv cv = cvGenService.getGeneratedCv(id);
+
+        if (GeneratedCv.STATUS_SCORING.equals(cv.getStatus())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "该简历正在评分中，请稍后再试");
+        }
+
+        // 设置评分中状态
+        cv.setStatus(GeneratedCv.STATUS_SCORING);
+        cvGenService.saveGeneratedCv(cv);
+
+        // 异步执行评分
+        scoreExecutor.submit(() -> {
+            try {
+                log.info("开始异步评分: id={}", id);
+
+                // 加载 JD 内容
+                var jd = jdRepo.findById(cv.getJdId())
+                        .orElseThrow(() -> new AppException(ErrorCode.JOB_DESCRIPTION_NOT_FOUND, cv.getJdId()));
+
+                // 执行评分循环
+                CvGenerationOrchestrator orchestrator = new CvGenerationOrchestrator(
+                        ChatModelProvider.createChatModel(config), promptConfig);
+
+                CvGenerationOrchestrator.CvGenerationResult agentResult =
+                        orchestrator.generate(cv.getFinalContent(), jd.getContent());
+
+                // 回写评分结果
+                cvGenService.updateScores(id,
+                        agentResult.getFinalReview().getOverallScore(),
+                        agentResult.getFinalReview().getCombinedFeedback(),
+                        cvGenService.toRoleScoresJson(agentResult.getFinalReview().getRoleResults()),
+                        agentResult.getIterationHistory().size());
+
+                // 保存迭代记录
+                for (CvGenerationOrchestrator.IterationSnapshot snapshot : agentResult.getIterationHistory()) {
+                    CvGenerationRecord record = new CvGenerationRecord();
+                    record.setGeneratedCvId(id);
+                    record.setIteration(snapshot.getIteration());
+                    record.setRoleScores(cvGenService.toRoleScoresJson(
+                            snapshot.getReviewResult().getRoleResults()));
+                    record.setOverallScore(snapshot.getReviewResult().getOverallScore());
+                    record.setFeedback(snapshot.getReviewResult().getCombinedFeedback());
+                    record.setCvSnapshot(cv.getFinalContent());
+                    cvGenService.saveIterationRecord(record);
+                }
+
+                log.info("异步评分完成: id={}, score={}", id, agentResult.getFinalReview().getOverallScore());
+            } catch (Exception e) {
+                log.error("异步评分失败: id={}", id, e);
+                try {
+                    // 评分失败，恢复为草稿状态
+                    cv.setStatus(GeneratedCv.STATUS_DRAFT);
+                    cvGenService.saveGeneratedCv(cv);
+                } catch (Exception ignored) {
+                    log.error("恢复评分状态失败: id={}", id, ignored);
+                }
+            }
+        });
+
+        log.info("已提交异步评分任务: id={}", id);
+        ctx.status(202);
+        ctx.json(cv);
     }
 
     /**
@@ -157,7 +227,6 @@ public class CvGenerationRoutes {
      */
     private void handleGetHistory(Context ctx) {
         Long id = parseId(ctx);
-        // 确认生成记录存在
         cvGenService.getGeneratedCv(id);
         List<CvGenerationRecord> history = cvGenService.getIterationHistory(id);
         ctx.json(history);
@@ -165,8 +234,6 @@ public class CvGenerationRoutes {
 
     /**
      * 处理简历预览请求。
-     *
-     * <p>返回 text/html 格式，浏览器可直接渲染。</p>
      */
     private void handlePreview(Context ctx) {
         Long id = parseId(ctx);
@@ -195,8 +262,6 @@ public class CvGenerationRoutes {
 
     /**
      * 处理导出简历下载请求。
-     *
-     * <p>将 HTML 简历内容作为文件下载，文件名格式为 "简历_日期.html"。</p>
      */
     private void handleExport(Context ctx) {
         Long id = parseId(ctx);
@@ -205,7 +270,6 @@ public class CvGenerationRoutes {
         InputStream fileStream = exportService.exportAsHtml(cv);
         String fileName = exportService.generateFileName(cv);
 
-        // 标记为已导出
         cvGenService.markExported(id);
 
         ctx.contentType(exportService.getContentType());
@@ -227,6 +291,17 @@ public class CvGenerationRoutes {
             return Long.parseLong(ctx.pathParam("id"));
         } catch (NumberFormatException e) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "无效的 ID 格式");
+        }
+    }
+
+    private int parseIntParam(Context ctx, String key, int defaultValue) {
+        String val = ctx.queryParam(key);
+        if (val == null || val.isEmpty()) return defaultValue;
+        try {
+            int parsed = Integer.parseInt(val);
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (NumberFormatException e) {
+            return defaultValue;
         }
     }
 }

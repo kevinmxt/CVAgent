@@ -39,7 +39,7 @@ export interface JobDescription {
   updatedAt: string;
 }
 
-export type CvStatus = 'DRAFT' | 'FINAL' | 'EXPORTED';
+export type CvStatus = 'DRAFT' | 'SCORING' | 'FINAL' | 'EXPORTED';
 
 export interface GeneratedCv {
   id: number;
@@ -47,13 +47,17 @@ export interface GeneratedCv {
   templateId: number;
   jdId: number;
   finalContent: string;
-  finalScore: number;
-  finalFeedback: string;
-  roleScores: string; // JSON string: {"hr": 0.8, "techExpert": 0.7, ...}
+  finalScore: number | null;
+  finalFeedback: string | null;
+  roleScores: string | null; // JSON string: {"hr": 0.8, "techExpert": 0.7, ...}
   iterationCount: number;
   status: CvStatus;
   createdAt: string;
   updatedAt: string;
+  // transient display fields (not persisted, filled by list API)
+  workExpName?: string;
+  templateName?: string;
+  jdTitle?: string;
 }
 
 export interface CvGenerationRecord {

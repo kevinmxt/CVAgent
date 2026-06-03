@@ -28,7 +28,8 @@ CVAgent/
 │   └── src/
 │       ├── main/java/me/maxt/cv/
 │       │   ├── agent/
-│       │   │   └── ChatModelProvider.java          # ChatModel 工厂（支持 openai/ollama，扩展点预留）
+│       │   │   ├── ChatModelProvider.java          # ChatModel 工厂（支持 openai/ollama，扩展点预留）
+│       │   │   └── TokenLoggingChatModel.java       # ChatModel 包装器（拦截 LLM 调用并记录 token 消耗日志）
 │       │   ├── common/error/
 │       │   │   ├── ErrorCode.java                  # 全局错误码枚举（系统/校验/业务/Agent）
 │       │   │   ├── AppException.java               # 应用全局异常基类
@@ -187,7 +188,7 @@ git clone <repo-url> && cd CVAgent
 | `CV_LLM_MAX_TOKENS` | 最大输出 Token 数 | `4096` |
 | `CV_LLM_TIMEOUT` | API 超时秒数 | `120` |
 | `CV_DB_MODE` | 数据库模式（h2 / mysql） | `h2` |
-| `CV_AGENT_MAX_ITERATIONS` | Agent 最大迭代次数 | `3` |
+| `CV_AGENT_MAX_ITERATIONS` | Agent 最大迭代次数 | `1` |
 | `CV_AGENT_PASS_SCORE` | Agent 通过评分阈值 (0~1) | `0.8` |
 | `CV_DATA_DIR` | H2 数据库目录（绝对路径） | JAR 同级 `data/` |
 | `CV_SERVER_PORT` | HTTP 服务端口 | `8080` |
@@ -257,17 +258,18 @@ mvn test -pl cvagent-core
 
 `CvGenerationOrchestrator`（位于 `cvagent-agent` 模块）协调迭代优化流水线：
 
-1. 调用 `CvGenerationService.fillTemplate()` 将工作经历数据填入 HTML 模板
-2. `performMultiRoleReview()` 依次调用各角色 Agent 独立评审，计算加权综合评分
-3. 达到通过阈值（默认 0.8）或最大迭代次数（默认 3）时退出
-4. `performTailoring()` 根据合并反馈优化简历
-5. 记录每轮迭代的完整快照（评分、反馈、简历内容）
+1. 用户选择工作经历 + 模板 + JD，`CvGenerationService.fillTemplate()` 将工作经历数据填入 HTML 模板并持久化（无评分）
+2. 用户在结果页面手动触发「开始评分」，后台异步启动 Agent 迭代循环
+3. `performMultiRoleReview()` 依次调用各角色 Agent 独立评审，计算加权综合评分
+4. 达到通过阈值（默认 0.8）或最大迭代次数（默认 1）时退出
+5. `performTailoring()` 根据合并反馈优化简历
+6. 记录每轮迭代的完整快照（评分、反馈、简历内容），轮询自动刷新结果页
 
 ### REST API（cvagent-web）
 
 Web 模块基于 Javalin 提供 RESTful 接口：
 
-- **CV 生成路由**（`CvGenerationRoutes`）：`POST /api/v1/cv-generations/generate` 生成、`GET /{id}` 查询、`GET /{id}/history` 迭代历史、`GET /{id}/preview` HTML 预览、`PUT /{id}` 更新内容、`POST /{id}/export` 导出下载、`DELETE /{id}` 删除
+- **CV 生成路由**（`CvGenerationRoutes`）：`GET /` 分页列表、`POST /generate` 生成（仅填模板不含评分）、`POST /{id}/score` 异步评分、`GET /{id}` 查询、`GET /{id}/history` 迭代历史、`GET /{id}/preview` HTML 预览、`PUT /{id}` 更新内容、`POST /{id}/export` 导出下载、`DELETE /{id}` 删除
 - **基础 CRUD 路由**：`CvTemplateRoutes`、`JobDescriptionRoutes`、`WorkExperienceRoutes` 提供对应的 CRUD 接口
 - **认证体系**：`AuthProvider` 接口 + `PermissionCheck` 权限校验 + `UserIdentity` 用户身份模型
 - **全局处理**：`ExceptionHandler` 统一异常处理、`CorsHandler` 跨域支持
@@ -280,7 +282,8 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 - **工作经历维护**：支持从 txt/docx/html/pdf 文件导入，AI 自动解析姓名、邮箱、电话、技能、个人简介、工作经历、教育背景等字段，支持在线编辑和删除
 - **简历模板维护**：预置 2 套模板（标准专业/简洁高效），支持自定义模板上传，预置模板受保护不可删除
 - **JD 维护**：支持文件导入和手动创建，存储职位和公司信息
-- **CV 生成**：选择工作经历 + 模板 + JD，由 AI Agent 多角色评审（HR/技术/领导），评分达标后生成 HTML 简历，支持预览、在线编辑和导出下载。低于阈值时展示评分详情和提升建议
+- **CV 生成**：选择工作经历 + 模板 + JD，一键填充模板生成 HTML 简历，支持在线预览、编辑和导出。生成后可手动触发 AI Agent 异步评分（多角色评审），系统后台执行评分循环并自动回写结果，低于阈值时展示评分详情和提升建议
+- **生成记录**：查看所有历史生成记录（含姓名/模板/JD/评分/状态），支持分页浏览、导出和删除
 - **构建自动化**：`mvn package` 时自动执行 `npm install && npm run build`，产物输出到 `resources/public/`，由 Javalin 作为静态文件提供服务
 
 ### 灵活配置
@@ -304,7 +307,7 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 - `CvTemplate`：简历 HTML 模板，含占位符，对应数据库表 `cv_template`
 - `WorkExperience`：工作经历实体，记录人员信息、技能、履历、教育背景
 - `JobDescription`：岗位描述实体，存储职位标题、公司、JD 内容和原始文件信息
-- `GeneratedCv`：生成的简历实体，关联模板、工作经历、JD，记录最终 HTML 内容、综合评分、各角色评分明细和状态（草稿/定稿/已导出）
+- `GeneratedCv`：生成的简历实体，关联模板、工作经历、JD，记录最终 HTML 内容、综合评分、各角色评分明细和状态（草稿/评分中/定稿/已导出）
 - `CvGenerationRecord`：生成迭代记录，保存 Agent 每次迭代的完整快照（各角色评分、反馈、简历快照），便于回溯生成过程
 - `CvTemplateRepository`：基于 JOOQ 的数据访问层，提供简历模板的 CRUD 操作
 - `GeneratedCvRepository`：基于 JOOQ 的数据访问层，提供生成简历及其迭代记录的 CRUD 操作

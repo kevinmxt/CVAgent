@@ -16,7 +16,7 @@ export default function CvResultPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const { state, result, history, loadingHistory, updating, exporting, loadResult, loadHistory, updateContent, exportCv } = useCvGenerations();
+  const { state, result, history, loadingHistory, updating, exporting, scoring, loadResult, loadHistory, updateContent, exportCv, scoreCv } = useCvGenerations();
   const [activeTab, setActiveTab] = useState<'preview' | 'edit' | 'history'>('preview');
 
   useEffect(() => {
@@ -26,6 +26,21 @@ export default function CvResultPage() {
     }
   }, [id, loadResult, loadHistory]);
 
+  // Poll while scoring
+  useEffect(() => {
+    if (!result || result.status !== 'SCORING') return;
+    const interval = setInterval(async () => {
+      if (id) {
+        const data = await loadResult(Number(id));
+        if (data && data.status !== 'SCORING') {
+          clearInterval(interval);
+          addToast('success', '评分完成');
+        }
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [result?.status, id, loadResult, addToast]);
+
   const handleExport = async () => {
     if (!result) return;
     try {
@@ -33,6 +48,18 @@ export default function CvResultPage() {
       addToast('success', '简历已导出');
     } catch (e: any) {
       addToast('error', e.message || '导出失败');
+    }
+  };
+
+  const handleScore = async () => {
+    if (!result) return;
+    try {
+      await scoreCv(result.id);
+      addToast('success', '评分完成');
+      // Reload history
+      if (id) loadHistory(Number(id));
+    } catch (e: any) {
+      addToast('error', e.message || '评分失败，请重试');
     }
   };
 
@@ -65,6 +92,9 @@ export default function CvResultPage() {
 
   if (!result) return null;
 
+  const hasScore = result.finalScore != null;
+  const isScoring = result.status === 'SCORING';
+
   return (
     <div className="page">
       <div className="page-header">
@@ -73,6 +103,15 @@ export default function CvResultPage() {
           <button className="btn btn-outline" onClick={() => navigate('/cv-generate')}>
             重新生成
           </button>
+          {!hasScore && !isScoring && (
+            <button
+              className="btn btn-primary"
+              onClick={handleScore}
+              disabled={scoring}
+            >
+              {scoring ? '提交中...' : '开始评分'}
+            </button>
+          )}
           <button
             className="btn btn-primary"
             onClick={handleExport}
@@ -83,42 +122,61 @@ export default function CvResultPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-        {/* Score Overview */}
-        <div className="card">
-          <div className="card-header">综合评分</div>
-          <div className="card-body">
-            <ScoreOverview
-              finalScore={result.finalScore}
-              threshold={DEFAULT_PASS_SCORE}
-              status={result.status}
-              iterationCount={result.iterationCount}
-            />
+      {!hasScore && !isScoring ? (
+        <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+          <div className="card-body" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)', opacity: 0.3 }}>?</div>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)' }}>
+              尚未评分，请点击上方「开始评分」按钮，系统将根据 JD 要求进行多角色评审
+            </p>
           </div>
         </div>
-
-        {/* Role Scores */}
-        <div className="card">
-          <div className="card-header">角色评分明细</div>
-          <div className="card-body">
-            <RoleScoresBreakdown roleScoresJson={result.roleScores} />
+      ) : isScoring ? (
+        <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+          <div className="card-body" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
+            <LoadingSpinner size="md" text="AI 正在评审中，请稍候..." />
+            <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-sm)' }}>
+              评分将在后台执行，页面会自动刷新显示结果
+            </p>
           </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
+            <div className="card">
+              <div className="card-header">综合评分</div>
+              <div className="card-body">
+                <ScoreOverview
+                  finalScore={result.finalScore!}
+                  threshold={DEFAULT_PASS_SCORE}
+                  status={result.status}
+                  iterationCount={result.iterationCount}
+                />
+              </div>
+            </div>
 
-      {/* Feedback */}
-      <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-        <div className="card-header">
-          {result.finalScore >= DEFAULT_PASS_SCORE ? '评审反馈' : '改进建议'}
-        </div>
-        <div className="card-body">
-          <FeedbackPanel
-            feedback={result.finalFeedback}
-            threshold={DEFAULT_PASS_SCORE}
-            finalScore={result.finalScore}
-          />
-        </div>
-      </div>
+            <div className="card">
+              <div className="card-header">角色评分明细</div>
+              <div className="card-body">
+                <RoleScoresBreakdown roleScoresJson={result.roleScores ?? ''} />
+              </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+            <div className="card-header">
+              {result.finalScore! >= DEFAULT_PASS_SCORE ? '评审反馈' : '改进建议'}
+            </div>
+            <div className="card-body">
+              <FeedbackPanel
+                feedback={result.finalFeedback ?? ''}
+                threshold={DEFAULT_PASS_SCORE}
+                finalScore={result.finalScore!}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Tabs: Preview / Edit / History */}
       <div className="card">

@@ -3,6 +3,7 @@ package me.maxt.cv.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
+import me.maxt.cv.agent.TokenLoggingChatModel;
 import me.maxt.cv.common.error.AppException;
 import me.maxt.cv.common.error.ErrorCode;
 import me.maxt.cv.common.util.FileImportUtil;
@@ -185,6 +186,7 @@ public class WorkExperienceService {
 
         try {
             String prompt = buildExtractionPrompt(content);
+            TokenLoggingChatModel.setOperation("工作经历智能解析");
             String response = chatModel.chat(prompt);
             if (response == null) {
                 throw new AppException(ErrorCode.AGENT_EXECUTION_FAILED, "AI 模型返回为空，请检查 API 配置");

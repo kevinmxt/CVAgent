@@ -9,6 +9,7 @@ const CvTemplatesPage = lazy(() => import('./pages/CvTemplatesPage'));
 const JobDescriptionsPage = lazy(() => import('./pages/JobDescriptionsPage'));
 const CvGeneratePage = lazy(() => import('./pages/CvGenerations/CvGeneratePage'));
 const CvResultPage = lazy(() => import('./pages/CvGenerations/CvResultPage'));
+const CvHistoryPage = lazy(() => import('./pages/CvGenerations/CvHistoryPage'));
 
 function PageFallback() {
   return <LoadingSpinner size="lg" text="加载中..." />;
@@ -24,6 +25,7 @@ export default function App() {
               <Route path="/" element={<Navigate to="/cv-generate" replace />} />
               <Route path="/cv-generate" element={<CvGeneratePage />} />
               <Route path="/cv-result/:id" element={<CvResultPage />} />
+              <Route path="/cv-history" element={<CvHistoryPage />} />
               <Route path="/work-experiences" element={<WorkExperiencesPage />} />
               <Route path="/templates" element={<CvTemplatesPage />} />
               <Route path="/job-descriptions" element={<JobDescriptionsPage />} />

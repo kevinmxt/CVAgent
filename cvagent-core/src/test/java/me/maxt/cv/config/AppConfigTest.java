@@ -31,7 +31,7 @@ class AppConfigTest {
         assertTrue(config.getH2Url().contains("h2"));
 
         // Agent 默认值
-        assertEquals(3, config.getAgentMaxIterations());
+        assertEquals(1, config.getAgentMaxIterations());
         assertEquals(0.8, config.getAgentPassScore(), 0.01);
 
         // 服务器默认值

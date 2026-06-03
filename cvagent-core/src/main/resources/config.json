@@ -22,7 +22,7 @@
     }
   },
   "agent": {
-    "maxIterations": 3,
+    "maxIterations": 1,
     "passScore": 0.8,
     "reviewerRoles": {
       "hr": {

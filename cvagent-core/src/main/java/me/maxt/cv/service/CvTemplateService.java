@@ -1,6 +1,7 @@
 package me.maxt.cv.service;
 
 import dev.langchain4j.model.chat.ChatModel;
+import me.maxt.cv.agent.TokenLoggingChatModel;
 import me.maxt.cv.common.error.AppException;
 import me.maxt.cv.common.error.ErrorCode;
 import me.maxt.cv.common.util.FileImportUtil;
@@ -141,6 +142,7 @@ public class CvTemplateService {
         }
 
         String prompt = buildTemplateGenerationPrompt(content);
+        TokenLoggingChatModel.setOperation("简历模板生成");
         String response = chatModel.chat(prompt);
         if (response == null) {
             throw new AppException(ErrorCode.AGENT_EXECUTION_FAILED, "AI 模型返回为空，请检查 API 配置");

@@ -59,22 +59,24 @@ public class ChatModelProvider {
         String provider = config.getLlmProvider();
         log.info("创建 ChatModel: provider={}, model={}, baseUrl={}", provider, config.getModelName(), config.getBaseUrl());
 
-        // 根据 provider 切换 LLM 实现
+        ChatModel model;
         switch (provider.toLowerCase()) {
             case "openai":
-                return createOpenAiModel(config);
+                model = createOpenAiModel(config);
+                break;
             case "ollama":
-                // Ollama 预留扩展点，当前使用 OpenAI 兼容 API
                 log.warn("Ollama 提供者尚未完全实现，使用 OpenAI 兼容模式连接");
-                return createOpenAiModel(config);
+                model = createOpenAiModel(config);
+                break;
             default:
-                // 尝试通过 SPI 加载自定义实现（预留扩展点）
                 ChatModel customModel = loadCustomProvider(provider);
                 if (customModel != null) {
-                    return customModel;
+                    model = customModel;
+                    break;
                 }
                 throw new AppException(ErrorCode.LLM_PROVIDER_NOT_SUPPORTED, provider);
         }
+        return new TokenLoggingChatModel(model);
     }
 
     /**

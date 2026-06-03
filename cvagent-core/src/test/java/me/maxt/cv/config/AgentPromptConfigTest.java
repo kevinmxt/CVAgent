@@ -58,7 +58,7 @@ class AgentPromptConfigTest {
         AppConfig config = new AppConfig();
         AgentPromptConfig promptConfig = new AgentPromptConfig(config);
 
-        assertEquals(3, promptConfig.getMaxIterations());
+        assertEquals(1, promptConfig.getMaxIterations());
         assertEquals(0.8, promptConfig.getPassScore(), 0.01);
     }
 

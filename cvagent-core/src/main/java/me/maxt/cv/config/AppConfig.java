@@ -110,7 +110,7 @@ public class AppConfig {
         this.mysqlPassword = "root";
 
         // Agent 默认值
-        this.agentMaxIterations = 3;
+        this.agentMaxIterations = 1;
         this.agentPassScore = 0.8;
         this.reviewerRoles = new LinkedHashMap<>();
         this.tailorConfig = new TailorConfig();

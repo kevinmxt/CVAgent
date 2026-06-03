@@ -19,6 +19,8 @@ public class GeneratedCv {
     public static final String STATUS_FINAL = "FINAL";
     /** 状态：已导出 */
     public static final String STATUS_EXPORTED = "EXPORTED";
+    /** 状态：评分中 */
+    public static final String STATUS_SCORING = "SCORING";
 
     /** 主键 ID */
     private Long id;
@@ -44,6 +46,11 @@ public class GeneratedCv {
     private LocalDateTime createdAt;
     /** 更新时间 */
     private LocalDateTime updatedAt;
+
+    // ===== 列表展示用 transient 字段（不持久化） =====
+    private transient String workExpName;
+    private transient String templateName;
+    private transient String jdTitle;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -80,4 +87,13 @@ public class GeneratedCv {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getWorkExpName() { return workExpName; }
+    public void setWorkExpName(String workExpName) { this.workExpName = workExpName; }
+
+    public String getTemplateName() { return templateName; }
+    public void setTemplateName(String templateName) { this.templateName = templateName; }
+
+    public String getJdTitle() { return jdTitle; }
+    public void setJdTitle(String jdTitle) { this.jdTitle = jdTitle; }
 }

@@ -9,6 +9,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/cv-generate', label: '生成简历', icon: '✦' },
+  { to: '/cv-history', label: '生成记录', icon: '☰' },
   { to: '/work-experiences', label: '工作经历', icon: '☷' },
   { to: '/templates', label: '简历模板', icon: '⊞' },
   { to: '/job-descriptions', label: '岗位描述', icon: '⚲' },

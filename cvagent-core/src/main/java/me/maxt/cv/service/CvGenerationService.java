@@ -3,6 +3,7 @@ package me.maxt.cv.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.model.chat.ChatModel;
+import me.maxt.cv.agent.TokenLoggingChatModel;
 import me.maxt.cv.common.error.AppException;
 import me.maxt.cv.common.error.ErrorCode;
 import me.maxt.cv.store.entity.CvGenerationRecord;
@@ -189,15 +190,48 @@ public class CvGenerationService {
     }
 
     /**
-     * 分页查询所有生成的简历。
+     * 分页查询所有生成的简历，并填充关联实体的显示名称。
      *
      * @param page 页码
      * @param size 每页条数
-     * @return 生成简历列表
+     * @return 生成简历列表（含 workExpName / templateName / jdTitle）
      */
     public List<GeneratedCv> listGeneratedCvs(int page, int size) {
         int offset = (page - 1) * size;
-        return generatedCvRepo.findAll(offset, size);
+        List<GeneratedCv> list = generatedCvRepo.findAll(offset, size);
+        for (GeneratedCv cv : list) {
+            workExpRepo.findById(cv.getWorkExpId())
+                    .ifPresent(we -> cv.setWorkExpName(we.getPersonName()));
+            templateRepo.findById(cv.getTemplateId())
+                    .ifPresent(t -> cv.setTemplateName(t.getName()));
+            jdRepo.findById(cv.getJdId())
+                    .ifPresent(jd -> cv.setJdTitle(jd.getTitle()));
+        }
+        return list;
+    }
+
+    /**
+     * 查询生成简历总数。
+     *
+     * @return 总数
+     */
+    public int count() {
+        return generatedCvRepo.count();
+    }
+
+    /**
+     * 更新评分结果（用于异步评分完成后回写）。
+     */
+    public void updateScores(Long id, Double finalScore, String finalFeedback,
+                             String roleScores, int iterationCount) {
+        GeneratedCv cv = getGeneratedCv(id);
+        cv.setFinalScore(finalScore);
+        cv.setFinalFeedback(finalFeedback);
+        cv.setRoleScores(roleScores);
+        cv.setIterationCount(iterationCount);
+        cv.setStatus(GeneratedCv.STATUS_DRAFT);
+        generatedCvRepo.update(cv);
+        log.info("评分结果已更新: id={}, score={}, iterations={}", id, finalScore, iterationCount);
     }
 
     /**
@@ -307,6 +341,7 @@ public class CvGenerationService {
                     原始简历内容：
                     """ + truncateRawContent(rawContent);
 
+            TokenLoggingChatModel.setOperation("模板占位符智能填充");
             String response = chatModel.chat(prompt);
             if (response == null) {
                 log.warn("AI 智能填充返回为空，保留未填充的占位符");
