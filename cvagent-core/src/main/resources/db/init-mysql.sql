@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS generated_cv (
     template_id      BIGINT        NOT NULL COMMENT '关联模板 ID',
     jd_id            BIGINT        NOT NULL COMMENT '关联 JD ID',
     final_content    LONGTEXT      NOT NULL COMMENT '最终生成的 HTML 简历内容',
-    final_score      DOUBLE        NOT NULL DEFAULT 0 COMMENT '最终综合评分 (0-1)',
+    final_score      DOUBLE        NULL DEFAULT 0 COMMENT '最终综合评分 (0-1)',
     final_feedback   TEXT          NULL COMMENT '最终反馈意见',
     role_scores      JSON          NULL COMMENT '各角色评分快照（JSON格式）',
     iteration_count  INT           NOT NULL DEFAULT 0 COMMENT 'Agent 迭代次数',
