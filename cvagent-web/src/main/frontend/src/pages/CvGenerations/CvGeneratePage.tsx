@@ -27,12 +27,12 @@ export default function CvGeneratePage() {
   // Generation state
   const { state, generate, cancel } = useCvGenerations();
 
-  const canGenerate = selectedWE && selectedTPL && selectedJD;
+  const canGenerate = selectedWE && selectedTPL;
   const isGenerating = state.status === 'generating';
 
   const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
-    const result = await generate(selectedWE, selectedTPL, selectedJD);
+    const result = await generate(selectedWE, selectedTPL, selectedJD ?? undefined);
     if (result) {
       addToast('success', '简历生成完成');
       navigate(`/cv-result/${result.id}`);
@@ -92,12 +92,12 @@ export default function CvGeneratePage() {
           })}
         />
         <CardSelector<JobDescription>
-          title={`岗位描述 (${jdData?.items.length || 0})`}
+          title={`岗位描述（可选）(${jdData?.items.length || 0})`}
           items={jdData?.items || []}
           selectedId={selectedJD}
           onSelect={setSelectedJD}
           loading={jdLoading}
-          emptyText="暂无岗位描述，请先导入"
+          emptyText="暂无岗位描述"
           renderItem={(jd) => ({
             id: jd.id,
             title: jd.title || '未命名',
@@ -117,7 +117,7 @@ export default function CvGeneratePage() {
         </button>
         {!canGenerate && (
           <p style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-            请选择工作经历、简历模板和岗位描述
+            请选择工作经历和简历模板
           </p>
         )}
       </div>

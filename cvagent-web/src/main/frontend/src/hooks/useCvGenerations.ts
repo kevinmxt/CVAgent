@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import * as api from '../api/cvGenerations';
-import type { GeneratedCv, CvGenerationRecord, PageResult } from '../api/types';
+import type { GeneratedCv, CvScoringResult, CvGenerationRecord, PageResult } from '../api/types';
 import { ApiError } from '../api/client';
 import { GENERATION_TIMEOUT_SECONDS } from '../utils/constants';
 
@@ -14,14 +14,15 @@ export interface GenerationState {
 export function useCvGenerations() {
   const [state, setState] = useState<GenerationState>({ status: 'idle', error: null });
   const [result, setResult] = useState<GeneratedCv | null>(null);
+  const [scoringResults, setScoringResults] = useState<CvScoringResult[]>([]);
   const [history, setHistory] = useState<CvGenerationRecord[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingScoring, setLoadingScoring] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [scoring, setScoring] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const generate = useCallback(async (workExpId: number, templateId: number, jdId: number) => {
+  const generate = useCallback(async (workExpId: number, templateId: number, jdId?: number) => {
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -66,15 +67,27 @@ export function useCvGenerations() {
     }
   }, []);
 
-  const loadHistory = useCallback(async (id: number) => {
-    setLoadingHistory(true);
+  const loadScoringResults = useCallback(async (cvId: number) => {
+    setLoadingScoring(true);
     try {
-      const data = await api.getGenerationHistory(id);
-      setHistory(data);
+      const data = await api.listScoringResults(cvId);
+      setScoringResults(data);
+      return data;
     } catch {
-      // silently fail for history
+      return [];
     } finally {
-      setLoadingHistory(false);
+      setLoadingScoring(false);
+    }
+  }, []);
+
+  const loadHistory = useCallback(async (cvId: number, srId: number) => {
+    try {
+      const data = await api.getScoringResultHistory(cvId, srId);
+      setHistory(data);
+      return data;
+    } catch {
+      setHistory([]);
+      return [];
     }
   }, []);
 
@@ -101,34 +114,45 @@ export function useCvGenerations() {
     }
   }, [result]);
 
-  /** Trigger async scoring, then poll until complete */
-  const scoreCv = useCallback(async (id: number): Promise<GeneratedCv | null> => {
+  const scoreCv = useCallback(async (id: number, jdId: number): Promise<CvScoringResult | null> => {
     setScoring(true);
     try {
-      await api.scoreCv(id);
-      // Poll every 3s until scoring finishes (finalScore != null)
-      let data: GeneratedCv = await api.getGeneratedCv(id);
-      const maxWait = 5 * 60 * 1000; // 5 min max
+      const sr = await api.scoreCv(id, jdId);
+      // Poll until scoring completes
+      const maxWait = 5 * 60 * 1000;
       const started = Date.now();
-      while ((data.finalScore == null || data.status === 'SCORING') && Date.now() - started < maxWait) {
+      let latest: CvScoringResult = sr;
+      while ((latest.status === 'SCORING') && Date.now() - started < maxWait) {
         await new Promise(r => setTimeout(r, 3000));
-        data = await api.getGeneratedCv(id);
+        const results = await api.listScoringResults(id);
+        const updated = results.find(r => r.id === sr.id);
+        if (updated) latest = updated;
       }
-      setResult(data);
-      return data;
-    } catch (e) {
-      // Scoring triggered, but may have failed server-side; reload to get current state
-      try {
-        const latest = await api.getGeneratedCv(id);
-        setResult(latest);
-      } catch {}
+      // Reload scoring results
+      const all = await api.listScoringResults(id);
+      setScoringResults(all);
+      return latest;
+    } catch {
       return null;
     } finally {
       setScoring(false);
     }
   }, []);
 
-  /** Load paginated list of generated CVs */
+  const [optimizing, setOptimizing] = useState(false);
+
+  const optimizeCv = useCallback(async (id: number, srId: number): Promise<string | null> => {
+    setOptimizing(true);
+    try {
+      const resp = await api.optimizeCv(id, srId);
+      return resp.optimizedContent;
+    } catch {
+      return null;
+    } finally {
+      setOptimizing(false);
+    }
+  }, []);
+
   const listCvs = useCallback(async (page: number = 1, size: number = 10): Promise<PageResult<GeneratedCv>> => {
     return api.listGeneratedCvs(page, size);
   }, []);
@@ -136,26 +160,15 @@ export function useCvGenerations() {
   const reset = useCallback(() => {
     setState({ status: 'idle', error: null });
     setResult(null);
+    setScoringResults([]);
     setHistory([]);
     abortRef.current?.abort();
   }, []);
 
   return {
-    state,
-    result,
-    history,
-    loadingHistory,
-    updating,
-    exporting,
-    scoring,
-    generate,
-    cancel,
-    loadResult,
-    loadHistory,
-    updateContent,
-    exportCv,
-    scoreCv,
-    listCvs,
-    reset,
+    state, result, scoringResults, history,
+    loadingScoring, updating, exporting, scoring, optimizing,
+    generate, cancel, loadResult, loadScoringResults, loadHistory,
+    updateContent, exportCv, scoreCv, optimizeCv, listCvs, reset,
   };
 }

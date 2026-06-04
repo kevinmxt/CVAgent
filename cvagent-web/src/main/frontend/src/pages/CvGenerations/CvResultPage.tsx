@@ -9,37 +9,39 @@ import IterationHistory from '../../components/cv/IterationHistory';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorState from '../../components/common/ErrorState';
 import { useCvGenerations } from '../../hooks/useCvGenerations';
+import { useJobDescriptions } from '../../hooks/useJobDescriptions';
 import { useToast } from '../../context/ToastContext';
 import { DEFAULT_PASS_SCORE } from '../../utils/constants';
+import type { CvScoringResult, CvGenerationRecord } from '../../api/types';
 
 export default function CvResultPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const { state, result, history, loadingHistory, updating, exporting, scoring, loadResult, loadHistory, updateContent, exportCv, scoreCv } = useCvGenerations();
-  const [activeTab, setActiveTab] = useState<'preview' | 'edit' | 'history'>('preview');
+  const { state, result, scoringResults, history, updating, exporting, scoring, optimizing, loadResult, loadScoringResults, loadHistory, updateContent, exportCv, scoreCv, optimizeCv } = useCvGenerations();
+  const { data: jdData } = useJobDescriptions(1, 50);
+  const [activeTab, setActiveTab] = useState<'preview' | 'edit'>('preview');
+  const [selectedJdId, setSelectedJdId] = useState<number | ''>('');
+  const [expandedSrId, setExpandedSrId] = useState<number | null>(null);
+  const [expandedHistory, setExpandedHistory] = useState<CvGenerationRecord[]>([]);
+  const [optimizedContent, setOptimizedContent] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
       loadResult(Number(id));
-      loadHistory(Number(id));
+      loadScoringResults(Number(id));
     }
-  }, [id, loadResult, loadHistory]);
+  }, [id, loadResult, loadScoringResults]);
 
-  // Poll while scoring
+  // Poll scoring results when any are SCORING
   useEffect(() => {
-    if (!result || result.status !== 'SCORING') return;
-    const interval = setInterval(async () => {
-      if (id) {
-        const data = await loadResult(Number(id));
-        if (data && data.status !== 'SCORING') {
-          clearInterval(interval);
-          addToast('success', '评分完成');
-        }
-      }
+    const hasScoring = scoringResults.some(sr => sr.status === 'SCORING');
+    if (!hasScoring) return;
+    const interval = setInterval(() => {
+      if (id) loadScoringResults(Number(id));
     }, 3000);
     return () => clearInterval(interval);
-  }, [result?.status, id, loadResult, addToast]);
+  }, [scoringResults, id, loadScoringResults]);
 
   const handleExport = async () => {
     if (!result) return;
@@ -52,15 +54,52 @@ export default function CvResultPage() {
   };
 
   const handleScore = async () => {
-    if (!result) return;
+    if (!result || selectedJdId === '') return;
     try {
-      await scoreCv(result.id);
+      await scoreCv(result.id, selectedJdId as number);
       addToast('success', '评分完成');
-      // Reload history
-      if (id) loadHistory(Number(id));
     } catch (e: any) {
-      addToast('error', e.message || '评分失败，请重试');
+      addToast('error', e.message || '评分失败');
     }
+  };
+
+  const handleToggleExpand = async (sr: CvScoringResult) => {
+    if (expandedSrId === sr.id) {
+      setExpandedSrId(null);
+      setExpandedHistory([]);
+    } else {
+      setExpandedSrId(sr.id);
+      if (id) {
+        const h = await loadHistory(Number(id), sr.id);
+        setExpandedHistory(h);
+      }
+    }
+  };
+
+  const handleOptimize = async (srId: number) => {
+    if (!result) return;
+    const optimized = await optimizeCv(result.id, srId);
+    if (optimized) {
+      setOptimizedContent(optimized);
+    } else {
+      addToast('error', '优化失败，请重试');
+    }
+  };
+
+  const handleSaveOptimized = async () => {
+    if (!result || !optimizedContent) return;
+    try {
+      await updateContent(result.id, optimizedContent);
+      setOptimizedContent(null);
+      addToast('success', '优化内容已保存');
+      loadResult(result.id);
+    } catch (e: any) {
+      addToast('error', e.message || '保存失败');
+    }
+  };
+
+  const handleDiscardOptimized = () => {
+    setOptimizedContent(null);
   };
 
   const handleSaveContent = async (content: string) => {
@@ -92,8 +131,7 @@ export default function CvResultPage() {
 
   if (!result) return null;
 
-  const hasScore = result.finalScore != null;
-  const isScoring = result.status === 'SCORING';
+  const jds = jdData?.items || [];
 
   return (
     <div className="page">
@@ -103,15 +141,6 @@ export default function CvResultPage() {
           <button className="btn btn-outline" onClick={() => navigate('/cv-generate')}>
             重新生成
           </button>
-          {!hasScore && !isScoring && (
-            <button
-              className="btn btn-primary"
-              onClick={handleScore}
-              disabled={scoring}
-            >
-              {scoring ? '提交中...' : '开始评分'}
-            </button>
-          )}
           <button
             className="btn btn-primary"
             onClick={handleExport}
@@ -122,126 +151,180 @@ export default function CvResultPage() {
         </div>
       </div>
 
-      {!hasScore && !isScoring ? (
-        <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-          <div className="card-body" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
-            <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)', opacity: 0.3 }}>?</div>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)' }}>
-              尚未评分，请点击上方「开始评分」按钮，系统将根据 JD 要求进行多角色评审
-            </p>
-          </div>
-        </div>
-      ) : isScoring ? (
-        <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-          <div className="card-body" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
-            <LoadingSpinner size="md" text="AI 正在评审中，请稍候..." />
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-sm)' }}>
-              评分将在后台执行，页面会自动刷新显示结果
-            </p>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-            <div className="card">
-              <div className="card-header">综合评分</div>
-              <div className="card-body">
-                <ScoreOverview
-                  finalScore={result.finalScore!}
-                  threshold={DEFAULT_PASS_SCORE}
-                  status={result.status}
-                  iterationCount={result.iterationCount}
-                />
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header">角色评分明细</div>
-              <div className="card-body">
-                <RoleScoresBreakdown roleScoresJson={result.roleScores ?? ''} />
-              </div>
-            </div>
+      {/* Scoring Section */}
+      <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+        <div className="card-header">简历评分</div>
+        <div className="card-body">
+          {/* JD selector + score button */}
+          <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
+            <select
+              className="form-select"
+              value={selectedJdId}
+              onChange={e => setSelectedJdId(e.target.value ? Number(e.target.value) : '')}
+              style={{ flex: 1 }}
+            >
+              <option value="">-- 选择岗位描述进行评分 --</option>
+              {jds.map(jd => (
+                <option key={jd.id} value={jd.id}>{jd.title}{jd.company ? ` - ${jd.company}` : ''}</option>
+              ))}
+            </select>
+            <button
+              className="btn btn-primary"
+              disabled={selectedJdId === '' || scoring}
+              onClick={handleScore}
+            >
+              {scoring ? '评分中...' : '开始评分'}
+            </button>
           </div>
 
-          <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-            <div className="card-header">
-              {result.finalScore! >= DEFAULT_PASS_SCORE ? '评审反馈' : '改进建议'}
+          {/* Scoring Results List */}
+          {scoringResults.length === 0 ? (
+            <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--font-size-sm)', textAlign: 'center', padding: 'var(--space-md)' }}>
+              暂无评分记录，请选择 JD 后点击「开始评分」
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+              {scoringResults.map(sr => (
+                <div key={sr.id} className="scoring-result-item" style={{
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  overflow: 'hidden',
+                }}>
+                  <div
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '12px 16px', cursor: 'pointer',
+                      background: 'var(--color-surface-alt)',
+                    }}
+                    onClick={() => handleToggleExpand(sr)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                      <span style={{ fontWeight: 600 }}>{sr.jdTitle || `JD #${sr.jdId}`}</span>
+                      {sr.status === 'SCORING' && <span className="badge badge-warning">评分中...</span>}
+                      {sr.status === 'COMPLETED' && sr.finalScore != null && (
+                        <span className={`badge ${sr.finalScore >= DEFAULT_PASS_SCORE ? 'badge-success' : 'badge-warning'}`}>
+                          {Math.round(sr.finalScore * 100)}%
+                        </span>
+                      )}
+                      {sr.status === 'FAILED' && <span className="badge badge-danger">失败</span>}
+                      {sr.status === 'COMPLETED' && (
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={(e) => { e.stopPropagation(); handleOptimize(sr.id); }}
+                          disabled={optimizing}
+                          style={{ marginLeft: 'auto' }}
+                        >
+                          {optimizing ? '优化中...' : '优化简历'}
+                        </button>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+                      {new Date(sr.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {expandedSrId === sr.id && sr.status === 'COMPLETED' && sr.finalScore != null && (
+                    <div style={{ padding: 'var(--space-md)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+                        <div className="card">
+                          <div className="card-header">综合评分</div>
+                          <div className="card-body">
+                            <ScoreOverview
+                              finalScore={sr.finalScore}
+                              threshold={DEFAULT_PASS_SCORE}
+                              status={sr.status}
+                              iterationCount={sr.iterationCount}
+                            />
+                          </div>
+                        </div>
+                        <div className="card">
+                          <div className="card-header">角色评分明细</div>
+                          <div className="card-body">
+                            <RoleScoresBreakdown roleScoresJson={sr.roleScores ?? ''} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="card" style={{ marginBottom: 'var(--space-md)' }}>
+                        <div className="card-header">
+                          {sr.finalScore >= DEFAULT_PASS_SCORE ? '评审反馈' : '改进建议'}
+                        </div>
+                        <div className="card-body">
+                          <FeedbackPanel
+                            feedback={sr.finalFeedback ?? ''}
+                            threshold={DEFAULT_PASS_SCORE}
+                            finalScore={sr.finalScore}
+                          />
+                        </div>
+                      </div>
+                      <IterationHistory history={expandedHistory} loading={false} />
+                    </div>
+                  )}
+
+                  {expandedSrId === sr.id && sr.status === 'SCORING' && (
+                    <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
+                      <LoadingSpinner size="sm" text="AI 正在评审中..." />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="card-body">
-              <FeedbackPanel
-                feedback={result.finalFeedback ?? ''}
-                threshold={DEFAULT_PASS_SCORE}
-                finalScore={result.finalScore!}
-              />
+          )}
+        </div>
+      </div>
+
+      {/* Optimized Preview */}
+      {optimizedContent && (
+        <div className="card" style={{ marginBottom: 'var(--space-lg)', borderColor: 'var(--color-primary)' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>优化预览</span>
+            <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+              <button className="btn btn-sm btn-primary" onClick={handleSaveOptimized}>保存</button>
+              <button className="btn btn-sm btn-outline" onClick={handleDiscardOptimized}>放弃</button>
             </div>
           </div>
-        </>
+          <div className="card-body">
+            <CvPreview htmlContent={optimizedContent} />
+          </div>
+        </div>
       )}
 
-      {/* Tabs: Preview / Edit / History */}
+      {/* Tabs: Preview / Edit */}
       <div className="card">
         <div className="tabs">
-          <button
-            className={`tab ${activeTab === 'preview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('preview')}
-          >
+          <button className={`tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>
             预览
           </button>
-          <button
-            className={`tab ${activeTab === 'edit' ? 'active' : ''}`}
-            onClick={() => setActiveTab('edit')}
-          >
+          <button className={`tab ${activeTab === 'edit' ? 'active' : ''}`} onClick={() => setActiveTab('edit')}>
             编辑
           </button>
-          <button
-            className={`tab ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            迭代历史 ({result.iterationCount})
-          </button>
         </div>
-
         <div>
           {activeTab === 'preview' && <CvPreview htmlContent={result.finalContent} />}
           {activeTab === 'edit' && (
-            <CvEditor
-              content={result.finalContent}
-              onSave={handleSaveContent}
-              saving={updating}
-            />
-          )}
-          {activeTab === 'history' && (
-            <IterationHistory
-              history={history}
-              loading={loadingHistory}
-            />
+            <CvEditor content={result.finalContent} onSave={handleSaveContent} saving={updating} />
           )}
         </div>
       </div>
 
       <style>{`
         .tabs {
-          display: flex;
-          border-bottom: 1px solid var(--color-border);
+          display: flex; border-bottom: 1px solid var(--color-border);
           background: var(--color-surface-alt);
           border-radius: var(--radius-lg) var(--radius-lg) 0 0;
         }
         .tab {
-          padding: 12px 24px;
-          border: none;
-          background: transparent;
-          font-size: var(--font-size-sm);
-          font-weight: 500;
-          color: var(--color-text-muted);
-          cursor: pointer;
+          padding: 12px 24px; border: none; background: transparent;
+          font-size: var(--font-size-sm); font-weight: 500;
+          color: var(--color-text-muted); cursor: pointer;
           transition: all var(--transition-fast);
-          border-bottom: 2px solid transparent;
-          margin-bottom: -1px;
+          border-bottom: 2px solid transparent; margin-bottom: -1px;
         }
         .tab:hover { color: var(--color-text); }
-        .tab.active {
-          color: var(--color-primary);
-          border-bottom-color: var(--color-primary);
+        .tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+        .form-select {
+          padding: 8px 12px; border: 1px solid var(--color-border);
+          border-radius: var(--radius-md); font-size: var(--font-size-sm);
+          background: var(--color-surface); color: var(--color-text);
         }
       `}</style>
     </div>

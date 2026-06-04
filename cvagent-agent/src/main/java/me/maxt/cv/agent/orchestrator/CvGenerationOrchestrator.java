@@ -236,6 +236,22 @@ public class CvGenerationOrchestrator {
     }
 
     /**
+     * 执行纯评审（单轮多角色评审，不进行迭代优化）。
+     *
+     * @param cv             简历内容
+     * @param jobDescription 岗位描述
+     * @return 多角色综合评审结果
+     */
+    public MultiRoleReviewResult review(String cv, String jobDescription) {
+        Map<String, ReviewerRoleConfig> roles = promptConfig.getReviewerRoles();
+        if (roles.isEmpty()) {
+            throw new AppException(ErrorCode.AGENT_EXECUTION_FAILED, "未配置评审角色");
+        }
+        log.info("开始多角色评审: cvLength={}, jdLength={}", cv.length(), jobDescription.length());
+        return performMultiRoleReview(cv, jobDescription, roles);
+    }
+
+    /**
      * 将合并后的评审反馈注入到优化 Agent 的提示词中并执行优化。
      *
      * @param cv             当前简历
@@ -254,6 +270,7 @@ public class CvGenerationOrchestrator {
             String resolvedTailorSystemPrompt = tailorConfig.getSystemPrompt()
                     .replace("{{cv}}", cv);
             String resolvedTailorUserPrompt = tailorConfig.getUserPrompt()
+                    .replace("{{cv}}", cv)
                     .replace("{{cvReview}}", combinedReview);
 
             TokenLoggingChatModel.setOperation("简历优化");

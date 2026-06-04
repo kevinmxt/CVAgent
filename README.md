@@ -42,6 +42,7 @@ CVAgent/
 │       │   │   └── DatabaseConfig.java             # 数据库配置管理（H2 / MySQL 自动切换、DDL 初始化）
 │       │   ├── service/
 │       │   │   ├── CvGenerationService.java         # 简历生成服务（模板填充、上下文加载、生成结果管理）
+│       │   │   ├── CvScoringResultService.java      # 评分结果服务（创建评分、异步回写、迭代记录）
 │       │   │   ├── CvTemplateService.java           # 简历模板业务服务（CRUD）
 │       │   │   ├── ExportService.java               # 简历导出服务（HTML 文件导出、状态管理）
 │       │   │   ├── JobDescriptionService.java       # 岗位描述业务服务（文件导入、CRUD）
@@ -51,12 +52,14 @@ CVAgent/
 │       │       │   └── DataSourceConfig.java       # 数据源配置（HikariCP 连接池，支持 H2/MySQL）
 │       │       ├── entity/
 │       │       │   ├── CvTemplate.java             # 简历模板实体（HTML 格式，含占位符）
-│       │       │   ├── CvGenerationRecord.java     # CV 生成迭代记录（每次迭代的快照、评分、反馈）
-│       │       │   ├── GeneratedCv.java            # 生成的简历实体（关联模板、JD、工作经历，含最终评分与状态）
+│       │       │   ├── CvGenerationRecord.java     # CV 迭代记录（归属于一次评分，快照、评分、反馈）
+│       │       │   ├── CvScoringResult.java        # CV 评分结果实体（关联 JD，含评分/反馈/角色评分，支持多 JD 评分）
+│       │       │   ├── GeneratedCv.java            # 生成的简历实体（关联模板和工作经历，评分独立存储）
 │       │       │   ├── JobDescription.java         # 岗位描述实体（职位、公司、JD 内容、原始文件信息）
 │       │       │   └── WorkExperience.java         # 工作经历实体（人员信息、技能、履历、教育背景）
 │       │       └── repository/
 │       │           ├── CvTemplateRepository.java      # 简历模板数据访问层（基于 JOOQ）
+│       │           ├── CvScoringResultRepository.java  # 评分结果数据访问层（基于 JOOQ）
 │       │           ├── GeneratedCvRepository.java     # 生成简历及迭代记录数据访问层（基于 JOOQ）
 │       │           ├── JobDescriptionRepository.java  # 岗位描述数据访问层（基于 JOOQ）
 │       │           └── WorkExperienceRepository.java  # 工作经历数据访问层（基于 JOOQ）
@@ -190,7 +193,7 @@ git clone <repo-url> && cd CVAgent
 | `CV_DB_MODE` | 数据库模式（h2 / mysql） | `h2` |
 | `CV_AGENT_MAX_ITERATIONS` | Agent 最大迭代次数 | `1` |
 | `CV_AGENT_PASS_SCORE` | Agent 通过评分阈值 (0~1) | `0.8` |
-| `CV_DATA_DIR` | H2 数据库目录（绝对路径） | JAR 同级 `data/` |
+| `CV_DATA_DIR` | H2 数据库目录（绝对路径） | 用户目录 `~/cvagent/data/` |
 | `CV_SERVER_PORT` | HTTP 服务端口 | `8080` |
 
 > 还支持 `CV_LLM_PROVIDER`、`CV_LLM_SYSTEM_PROMPT`、`CV_DB_H2_URL`、`CV_DB_MYSQL_URL`、`CV_DB_MYSQL_USERNAME`、`CV_DB_MYSQL_PASSWORD` 等环境变量，详见 `cvagent-core` 中的 `AppConfig.java`。
@@ -250,28 +253,28 @@ mvn test -pl cvagent-core
 
 > 各角色的系统提示词和用户提示词可通过 `config.json` 中的 `agent.reviewerRoles` 配置自定义，`AgentPromptConfig` 提供了默认的中文 Prompt。
 
-### AI Agent 简历定制
+### AI Agent 简历优化（两阶段）
 
-`CvTailorAgent` 根据多角色评审反馈对简历进行针对性优化，使其更匹配目标职位。核心原则：不编造事实，只基于已有信息优化，保持 HTML 格式完整。
+- **阶段一（生成时自动执行）**：填模板后自动调用 `CvTailorAgent` 对简历进行排版和文字润色，修正排版错误、优化遣词造句，不涉及 JD
+- **阶段二（评分后手动触发）**：评分完成后，用户可在结果页点击「优化简历」，Agent 基于 CV + JD + 评审反馈三者综合优化，预览后选择保存
 
 ### Agent 编排器
 
-`CvGenerationOrchestrator`（位于 `cvagent-agent` 模块）协调迭代优化流水线：
+`CvGenerationOrchestrator`（位于 `cvagent-agent` 模块）协调评审与优化流程：
 
-1. 用户选择工作经历 + 模板 + JD，`CvGenerationService.fillTemplate()` 将工作经历数据填入 HTML 模板并持久化（无评分）
-2. 用户在结果页面手动触发「开始评分」，后台异步启动 Agent 迭代循环
-3. `performMultiRoleReview()` 依次调用各角色 Agent 独立评审，计算加权综合评分
-4. 达到通过阈值（默认 0.8）或最大迭代次数（默认 1）时退出
-5. `performTailoring()` 根据合并反馈优化简历
-6. 记录每轮迭代的完整快照（评分、反馈、简历内容），轮询自动刷新结果页
+1. 用户选择工作经历 + 模板（JD 可选），`CvGenerationService.fillTemplate()` 将工作经历数据填入 HTML 模板
+2. 阶段一优化自动执行，修排版/措辞后持久化
+3. 用户在结果页面选择 JD 并点击「开始评分」，后台异步启动多角色评审（HR/技术专家/团队领导），一轮评审完成
+4. `performMultiRoleReview()` 按权重计算综合评分（默认阈值 0.8），生成反馈
+5. 用户可多次选择不同 JD 进行评分，每次评分结果独立存储
+6. 评分完成后可点击「优化简历」基于 JD + 反馈进行阶段二优化，预览后保存
 
 ### REST API（cvagent-web）
 
 Web 模块基于 Javalin 提供 RESTful 接口：
 
-- **CV 生成路由**（`CvGenerationRoutes`）：`GET /` 分页列表、`POST /generate` 生成（仅填模板不含评分）、`POST /{id}/score` 异步评分、`GET /{id}` 查询、`GET /{id}/history` 迭代历史、`GET /{id}/preview` HTML 预览、`PUT /{id}` 更新内容、`POST /{id}/export` 导出下载、`DELETE /{id}` 删除
+- **CV 生成路由**（`CvGenerationRoutes`）：`GET /` 分页列表、`POST /generate` 生成（填模板 + 阶段一优化）、`POST /{id}/score?jdId=X` 异步评分、`GET /{id}/scoring-results` 评分历史、`GET /{id}/scoring-results/{srId}/history` 迭代历史、`POST /{id}/optimize?srId=X` 阶段二优化、`GET /{id}` 查询、`GET /{id}/preview` HTML 预览、`PUT /{id}` 更新内容、`POST /{id}/export` 导出下载、`DELETE /{id}` 删除
 - **基础 CRUD 路由**：`CvTemplateRoutes`、`JobDescriptionRoutes`、`WorkExperienceRoutes` 提供对应的 CRUD 接口
-- **认证体系**：`AuthProvider` 接口 + `PermissionCheck` 权限校验 + `UserIdentity` 用户身份模型
 - **全局处理**：`ExceptionHandler` 统一异常处理、`CorsHandler` 跨域支持
 - **分页支持**：`PageResult` 泛型分页响应 DTO
 
@@ -282,8 +285,8 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 - **工作经历维护**：支持从 txt/docx/html/pdf 文件导入，AI 自动解析姓名、邮箱、电话、技能、个人简介、工作经历、教育背景等字段，支持在线编辑和删除
 - **简历模板维护**：预置 2 套模板（标准专业/简洁高效），支持自定义模板上传，预置模板受保护不可删除
 - **JD 维护**：支持文件导入和手动创建，存储职位和公司信息
-- **CV 生成**：选择工作经历 + 模板 + JD，一键填充模板生成 HTML 简历，支持在线预览、编辑和导出。生成后可手动触发 AI Agent 异步评分（多角色评审），系统后台执行评分循环并自动回写结果，低于阈值时展示评分详情和提升建议
-- **生成记录**：查看所有历史生成记录（含姓名/模板/JD/评分/状态），支持分页浏览、导出和删除
+- **CV 生成**：选择工作经历 + 模板（JD 可选），一键填充模板生成 HTML 简历（含阶段一自动优化）。生成后可选择 JD 手动触发异步评分（多角色评审：HR/技术专家/团队领导），系统后台执行评分并自动回写结果。支持多次选择不同 JD 分别评分，每次评分独立展示。评分完成后可触发阶段二优化（基于 JD + 反馈），预览后保存
+- **生成记录**：查看所有历史生成记录，支持分页浏览、导出和删除
 - **构建自动化**：`mvn package` 时自动执行 `npm install && npm run build`，产物输出到 `resources/public/`，由 Javalin 作为静态文件提供服务
 
 ### 灵活配置
@@ -307,14 +310,16 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 - `CvTemplate`：简历 HTML 模板，含占位符，对应数据库表 `cv_template`
 - `WorkExperience`：工作经历实体，记录人员信息、技能、履历、教育背景
 - `JobDescription`：岗位描述实体，存储职位标题、公司、JD 内容和原始文件信息
-- `GeneratedCv`：生成的简历实体，关联模板、工作经历、JD，记录最终 HTML 内容、综合评分、各角色评分明细和状态（草稿/评分中/定稿/已导出）
-- `CvGenerationRecord`：生成迭代记录，保存 Agent 每次迭代的完整快照（各角色评分、反馈、简历快照），便于回溯生成过程
+- `GeneratedCv`：生成的简历实体，关联模板和工作经历，记录最终 HTML 内容和状态（草稿/定稿/已导出）。评分独立存储在 `CvScoringResult` 中
+- `CvScoringResult`：CV 评分结果实体（对应 `cv_scoring_result` 表），关联 JD，记录综合评分、反馈、各角色评分明细和状态（评分中/已完成/失败），一个 CV 可关联多条评分结果
+- `CvGenerationRecord`：生成迭代记录（归属于一次评分），保存 Agent 迭代的完整快照（各角色评分、反馈、简历快照）
 - `CvTemplateRepository`：基于 JOOQ 的数据访问层，提供简历模板的 CRUD 操作
+- `CvScoringResultRepository`：基于 JOOQ 的数据访问层，提供评分结果的 CRUD 操作
 - `GeneratedCvRepository`：基于 JOOQ 的数据访问层，提供生成简历及其迭代记录的 CRUD 操作
 - `JobDescriptionRepository`：基于 JOOQ 的数据访问层，提供岗位描述的 CRUD 操作
 - `WorkExperienceRepository`：基于 JOOQ 的数据访问层，提供工作经历的 CRUD 操作
 
 ### 日志
 
-使用 Logback 统一日志输出，支持控制台和文件追加器，日志级别可通过 `logback.xml` 配置。JOOQ 的 SQL 执行日志和 LLM API 调用日志均被纳入统一体系。
+使用 Logback 统一日志输出，支持控制台和文件追加器，日志级别可通过 `logback.xml` 配置。JOOQ 的 SQL 执行日志和 LLM API 调用日志均被纳入统一体系。每次 LLM 调用后自动输出 token 消耗日志（输入/输出/总计）及当前操作名称。
 

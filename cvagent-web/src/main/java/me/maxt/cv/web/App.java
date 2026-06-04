@@ -9,11 +9,13 @@ import me.maxt.cv.config.AgentPromptConfig;
 import me.maxt.cv.config.AppConfig;
 import dev.langchain4j.model.chat.ChatModel;
 import me.maxt.cv.store.datasource.DataSourceConfig;
+import me.maxt.cv.store.repository.CvScoringResultRepository;
 import me.maxt.cv.store.repository.CvTemplateRepository;
 import me.maxt.cv.store.repository.GeneratedCvRepository;
 import me.maxt.cv.store.repository.JobDescriptionRepository;
 import me.maxt.cv.store.repository.WorkExperienceRepository;
 import me.maxt.cv.service.CvGenerationService;
+import me.maxt.cv.service.CvScoringResultService;
 import me.maxt.cv.service.CvTemplateService;
 import me.maxt.cv.service.ExportService;
 import me.maxt.cv.service.JobDescriptionService;
@@ -76,6 +78,9 @@ public class App {
                 workExpRepo, templateRepo, jdRepo, generatedCvRepo);
         cvGenService.setChatModel(chatModel);
         cvGenService.setMaxRawContentLength(config.getMaxTokens());
+        CvScoringResultRepository scoringResultRepo = new CvScoringResultRepository();
+        CvScoringResultService scoringResultService = new CvScoringResultService(
+                scoringResultRepo, generatedCvRepo, jdRepo);
         ExportService exportService = new ExportService();
 
         // 7. 创建 Agent 相关配置
@@ -103,7 +108,7 @@ public class App {
         new WorkExperienceRoutes(workExpService).register(app);
         new CvTemplateRoutes(templateService).register(app);
         new JobDescriptionRoutes(jdService).register(app);
-        new CvGenerationRoutes(cvGenService, exportService, config, promptConfig, jdRepo).register(app);
+        new CvGenerationRoutes(cvGenService, scoringResultService, exportService, config, promptConfig, jdRepo).register(app);
 
         // 11. SPA 回退：404 时返回 index.html
         app.error(404, ctx -> {

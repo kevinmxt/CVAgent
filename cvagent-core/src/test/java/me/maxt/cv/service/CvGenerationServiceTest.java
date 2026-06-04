@@ -4,7 +4,6 @@ import me.maxt.cv.common.error.AppException;
 import me.maxt.cv.common.error.ErrorCode;
 import me.maxt.cv.store.entity.CvTemplate;
 import me.maxt.cv.store.entity.GeneratedCv;
-import me.maxt.cv.store.entity.JobDescription;
 import me.maxt.cv.store.entity.WorkExperience;
 import me.maxt.cv.store.repository.CvTemplateRepository;
 import me.maxt.cv.store.repository.GeneratedCvRepository;
@@ -88,21 +87,18 @@ class CvGenerationServiceTest {
     }
 
     @Test
-    @DisplayName("loadContext 应加载三个关联数据")
+    @DisplayName("loadContext 应加载工作和模板两个关联数据")
     void testLoadContext() {
         WorkExperience we = new WorkExperience(); we.setId(1L);
         CvTemplate template = new CvTemplate(); template.setId(2L);
-        JobDescription jd = new JobDescription(); jd.setId(3L);
 
         when(workExpRepo.findById(1L)).thenReturn(Optional.of(we));
         when(templateRepo.findById(2L)).thenReturn(Optional.of(template));
-        when(jdRepo.findById(3L)).thenReturn(Optional.of(jd));
 
-        CvGenerationService.GenerationContext ctx = service.loadContext(1L, 2L, 3L);
+        CvGenerationService.GenerationContext ctx = service.loadContext(1L, 2L);
 
         assertNotNull(ctx.getWorkExperience());
         assertNotNull(ctx.getTemplate());
-        assertNotNull(ctx.getJobDescription());
     }
 
     @Test
@@ -111,7 +107,7 @@ class CvGenerationServiceTest {
         when(workExpRepo.findById(999L)).thenReturn(Optional.empty());
 
         AppException ex = assertThrows(AppException.class,
-                () -> service.loadContext(999L, 1L, 1L));
+                () -> service.loadContext(999L, 1L));
         assertEquals(ErrorCode.WORK_EXPERIENCE_NOT_FOUND, ex.getErrorCode());
     }
 

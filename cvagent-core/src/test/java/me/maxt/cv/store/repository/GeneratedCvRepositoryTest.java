@@ -2,6 +2,7 @@ package me.maxt.cv.store.repository;
 
 import me.maxt.cv.store.datasource.DataSourceConfig;
 import me.maxt.cv.store.entity.CvGenerationRecord;
+import me.maxt.cv.store.entity.CvScoringResult;
 import me.maxt.cv.store.entity.GeneratedCv;
 import org.junit.jupiter.api.*;
 
@@ -19,14 +20,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class GeneratedCvRepositoryTest {
 
     private static GeneratedCvRepository repository;
+    private static CvScoringResultRepository scoringResultRepo;
 
     @BeforeAll
     static void setUp() throws Exception {
         DataSourceConfig.initializeForTest("jdbc:h2:mem:test_gen_cv;DB_CLOSE_DELAY=-1");
         repository = new GeneratedCvRepository();
+        scoringResultRepo = new CvScoringResultRepository();
 
-        // 插入父表数据以满足 FK 约束
-        // cv_template 已通过 data-h2.sql 预置了 2 条数据（id=1, id=2）
         try (java.sql.Connection conn = java.sql.DriverManager.getConnection(
                 "jdbc:h2:mem:test_gen_cv;DB_CLOSE_DELAY=-1", "sa", "");
              java.sql.Statement stmt = conn.createStatement()) {
@@ -47,17 +48,11 @@ class GeneratedCvRepositoryTest {
         GeneratedCv cv = new GeneratedCv();
         cv.setWorkExpId(1L);
         cv.setTemplateId(1L);
-        cv.setJdId(1L);
         cv.setFinalContent("<html>测试简历</html>");
-        cv.setFinalScore(0.85);
-        cv.setFinalFeedback("很好");
-        cv.setRoleScores("{\"hr\":0.8,\"tech\":0.9}");
-        cv.setIterationCount(2);
         cv.setStatus(GeneratedCv.STATUS_DRAFT);
 
         GeneratedCv saved = repository.insert(cv);
         assertNotNull(saved.getId());
-        assertEquals(0.85, saved.getFinalScore());
         assertEquals(GeneratedCv.STATUS_DRAFT, saved.getStatus());
     }
 
@@ -68,16 +63,13 @@ class GeneratedCvRepositoryTest {
         GeneratedCv cv = new GeneratedCv();
         cv.setWorkExpId(1L);
         cv.setTemplateId(1L);
-        cv.setJdId(1L);
         cv.setFinalContent("<html>test2</html>");
-        cv.setFinalScore(0.6);
-        cv.setIterationCount(3);
         cv.setStatus(GeneratedCv.STATUS_FINAL);
         GeneratedCv saved = repository.insert(cv);
 
         var result = repository.findById(saved.getId());
         assertTrue(result.isPresent());
-        assertEquals(0.6, result.get().getFinalScore());
+        assertEquals(GeneratedCv.STATUS_FINAL, result.get().getStatus());
     }
 
     @Test
@@ -97,15 +89,12 @@ class GeneratedCvRepositoryTest {
 
     @Test
     @Order(5)
-    @DisplayName("update：更新状态")
+    @DisplayName("update：更新内容")
     void testUpdate() {
         GeneratedCv cv = new GeneratedCv();
         cv.setWorkExpId(1L);
         cv.setTemplateId(1L);
-        cv.setJdId(1L);
         cv.setFinalContent("<html>old</html>");
-        cv.setFinalScore(0.5);
-        cv.setIterationCount(1);
         cv.setStatus(GeneratedCv.STATUS_DRAFT);
         GeneratedCv saved = repository.insert(cv);
 
@@ -120,21 +109,26 @@ class GeneratedCvRepositoryTest {
 
     @Test
     @Order(6)
-    @DisplayName("insertRecord：插入迭代记录并查询")
+    @DisplayName("insertRecord：插入迭代记录并查询（通过评分结果）")
     void testInsertAndFindRecords() {
         GeneratedCv cv = new GeneratedCv();
         cv.setWorkExpId(1L);
         cv.setTemplateId(1L);
-        cv.setJdId(1L);
         cv.setFinalContent("<html>cv</html>");
-        cv.setFinalScore(0.7);
-        cv.setIterationCount(1);
         cv.setStatus(GeneratedCv.STATUS_DRAFT);
         GeneratedCv saved = repository.insert(cv);
 
+        // 先创建评分结果
+        CvScoringResult sr = new CvScoringResult();
+        sr.setGeneratedCvId(saved.getId());
+        sr.setJdId(1L);
+        sr.setIterationCount(0);
+        sr.setStatus(CvScoringResult.STATUS_SCORING);
+        CvScoringResult savedSr = scoringResultRepo.insert(sr);
+
         // 插入迭代记录
         CvGenerationRecord record = new CvGenerationRecord();
-        record.setGeneratedCvId(saved.getId());
+        record.setScoringResultId(savedSr.getId());
         record.setIteration(1);
         record.setRoleScores("{\"hr\":0.7}");
         record.setOverallScore(0.7);
@@ -144,7 +138,7 @@ class GeneratedCvRepositoryTest {
         assertNotNull(savedRecord.getId());
 
         // 查询迭代记录
-        List<CvGenerationRecord> records = repository.findRecordsByGeneratedCvId(saved.getId());
+        List<CvGenerationRecord> records = repository.findRecordsByScoringResultId(savedSr.getId());
         assertEquals(1, records.size());
         assertEquals(1, records.get(0).getIteration());
         assertEquals(0.7, records.get(0).getOverallScore());
@@ -152,27 +146,32 @@ class GeneratedCvRepositoryTest {
 
     @Test
     @Order(7)
-    @DisplayName("deleteById：级联删除迭代记录")
+    @DisplayName("deleteById：级联删除评分结果和迭代记录")
     void testDeleteById() {
         GeneratedCv cv = new GeneratedCv();
         cv.setWorkExpId(1L);
         cv.setTemplateId(1L);
-        cv.setJdId(1L);
         cv.setFinalContent("<html>del</html>");
-        cv.setFinalScore(0.3);
-        cv.setIterationCount(1);
         cv.setStatus(GeneratedCv.STATUS_DRAFT);
         GeneratedCv saved = repository.insert(cv);
 
+        // 创建评分结果
+        CvScoringResult sr = new CvScoringResult();
+        sr.setGeneratedCvId(saved.getId());
+        sr.setJdId(1L);
+        sr.setIterationCount(0);
+        sr.setStatus(CvScoringResult.STATUS_SCORING);
+        CvScoringResult savedSr = scoringResultRepo.insert(sr);
+
         // 插入迭代记录
         CvGenerationRecord record = new CvGenerationRecord();
-        record.setGeneratedCvId(saved.getId());
+        record.setScoringResultId(savedSr.getId());
         record.setIteration(1);
         record.setOverallScore(0.3);
         record.setCvSnapshot("<html>s</html>");
         repository.insertRecord(record);
 
-        // 删除
+        // 删除 CV（级联删除评分结果和迭代记录）
         repository.deleteById(saved.getId());
         assertFalse(repository.findById(saved.getId()).isPresent());
     }

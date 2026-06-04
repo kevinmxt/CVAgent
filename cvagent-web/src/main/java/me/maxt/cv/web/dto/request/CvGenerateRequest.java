@@ -14,7 +14,7 @@ public class CvGenerateRequest {
     private Long workExpId;
     /** 简历模板 ID（必填） */
     private Long templateId;
-    /** 岗位描述 ID（必填） */
+    /** 岗位描述 ID（可选） */
     private Long jdId;
 
     public Long getWorkExpId() { return workExpId; }
@@ -32,8 +32,8 @@ public class CvGenerateRequest {
      * @throws IllegalArgumentException 如果任一必填字段为空
      */
     public void validate() {
-        if (workExpId == null || templateId == null || jdId == null) {
-            throw new IllegalArgumentException("workExpId, templateId, jdId 均为必填项");
+        if (workExpId == null || templateId == null) {
+            throw new IllegalArgumentException("workExpId, templateId 为必填项");
         }
     }
 }

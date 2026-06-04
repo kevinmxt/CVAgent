@@ -88,26 +88,6 @@ export default function CvHistoryPage() {
       render: (cv: GeneratedCv) => cv.templateName || '-',
     },
     {
-      key: 'jdTitle',
-      header: 'JD',
-      render: (cv: GeneratedCv) => cv.jdTitle || '-',
-    },
-    {
-      key: 'finalScore',
-      header: '评分',
-      render: (cv: GeneratedCv) => {
-        if (cv.status === 'SCORING') return <span className="badge badge-warning">评分中...</span>;
-        if (cv.finalScore == null) return <span className="badge badge-info">未评分</span>;
-        const pct = Math.round(cv.finalScore * 100);
-        return <span style={{ fontWeight: 600, color: cv.finalScore >= 0.8 ? 'var(--color-success)' : 'var(--color-warning)' }}>{pct}%</span>;
-      },
-    },
-    {
-      key: 'iterationCount',
-      header: '迭代',
-      render: (cv: GeneratedCv) => cv.iterationCount != null ? `${cv.iterationCount}轮` : '-',
-    },
-    {
       key: 'status',
       header: '状态',
       render: (cv: GeneratedCv) => {

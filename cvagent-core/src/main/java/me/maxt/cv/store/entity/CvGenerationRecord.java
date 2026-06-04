@@ -15,8 +15,8 @@ public class CvGenerationRecord {
 
     /** 主键 ID */
     private Long id;
-    /** 关联的生成简历 ID */
-    private Long generatedCvId;
+    /** 关联的评分结果 ID */
+    private Long scoringResultId;
     /** 第几次迭代（从 1 开始） */
     private Integer iteration;
     /** 各角色评分的 JSON 快照 */
@@ -33,8 +33,8 @@ public class CvGenerationRecord {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Long getGeneratedCvId() { return generatedCvId; }
-    public void setGeneratedCvId(Long generatedCvId) { this.generatedCvId = generatedCvId; }
+    public Long getScoringResultId() { return scoringResultId; }
+    public void setScoringResultId(Long scoringResultId) { this.scoringResultId = scoringResultId; }
 
     public Integer getIteration() { return iteration; }
     public void setIteration(Integer iteration) { this.iteration = iteration; }

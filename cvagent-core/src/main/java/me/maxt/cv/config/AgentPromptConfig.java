@@ -50,18 +50,32 @@ public class AgentPromptConfig {
     }
 
     /**
-     * 获取优化 Agent 的配置，未配置时使用默认值。
-     *
-     * @return 优化 Agent 配置
+     * 获取阶段一优化 Agent 配置（生成时自动调用），未配置时使用默认值。
      */
     public TailorConfig getTailorConfig() {
         TailorConfig tailor = config.getTailorConfig();
-        // 如果配置中的 Prompt 为空，使用默认值
         if (tailor.getSystemPrompt() == null || tailor.getSystemPrompt().isEmpty()) {
             tailor.setSystemPrompt(getDefaultTailorSystemPrompt());
         }
         if (tailor.getUserPrompt() == null || tailor.getUserPrompt().isEmpty()) {
             tailor.setUserPrompt(getDefaultTailorUserPrompt());
+        }
+        return tailor;
+    }
+
+    /**
+     * 获取阶段二优化 Agent 配置（评分后手动触发），未配置时使用默认值。
+     */
+    public TailorConfig getPostScoringTailorConfig() {
+        TailorConfig tailor = config.getPostScoringTailorConfig();
+        if (tailor == null) {
+            tailor = new TailorConfig();
+        }
+        if (tailor.getSystemPrompt() == null || tailor.getSystemPrompt().isEmpty()) {
+            tailor.setSystemPrompt(getPostScoringTailorSystemPrompt());
+        }
+        if (tailor.getUserPrompt() == null || tailor.getUserPrompt().isEmpty()) {
+            tailor.setUserPrompt(getPostScoringTailorUserPrompt());
         }
         return tailor;
     }
@@ -156,23 +170,49 @@ public class AgentPromptConfig {
     }
 
     /**
-     * 获取默认的优化 Agent 系统提示词。
+     * 获取默认的阶段一优化 Agent 系统提示词（生成时自动调用，修排版/措辞）。
      */
     private String getDefaultTailorSystemPrompt() {
-        return "你是一个专业的简历优化专家。当前简历内容：\n{{cv}}\n\n" +
-               "请根据以下多角色评审反馈对简历进行优化，使HTML格式的简历更符合岗位要求。\n\n" +
-               "注意事项：\n" +
-               "1) 不要编造事实，只基于已有信息进行优化\n" +
-               "2) 保持HTML格式完整，不要破坏CSS样式\n" +
-               "3) 突出与岗位匹配的经验和技能\n" +
-               "4) 用词专业，排版清晰";
+        return "你是一个专业的简历排版和文字润色专家。请对以下简历进行润色优化。\n\n" +
+               "规则：\n" +
+               "1. 仅修正排版错误、调整遣词造句，使表达更专业流畅\n" +
+               "2. 不编造不存在的工作经历或技能\n" +
+               "3. 尽量保持原模板的 HTML 结构和 CSS 样式不变\n" +
+               "4. 直接返回完整的 HTML 代码，不要任何解释";
     }
 
     /**
-     * 获取默认的优化 Agent 用户提示词。
+     * 获取默认的阶段一优化 Agent 用户提示词。
      */
     private String getDefaultTailorUserPrompt() {
-        return "多角色评审反馈：\n{{cvReview}}\n\n" +
-               "请根据以上反馈，优化简历内容和排版。确保输出的HTML结构完整、样式美观。";
+        return "原始简历：\n{{cv}}\n\n请润色优化这份简历的排版和文字表达。";
+    }
+
+    /**
+     * 获取阶段二优化 Agent 系统提示词（评分后手动触发，基于 CV + JD + 评审反馈）。
+     */
+    public String getPostScoringTailorSystemPrompt() {
+        TailorConfig tailor = config.getTailorConfig();
+        // 阶段二配置在 config.json 的 tailorPostScoring 段
+        String sp = tailor.getSystemPrompt();
+        // 复用 stage 1 config 的 system prompt 作为判断：如果 config.json 里没配阶段二，用代码默认值
+        // 实际用 postScoringTailorConfig 字段
+        return "你是一个专业的简历优化专家。请根据岗位描述和多角色评审反馈对简历进行优化。\n\n" +
+               "规则：\n" +
+               "1. 基于已有简历内容进行优化，不编造不存在的工作经历或技能\n" +
+               "2. HTML 结构和 CSS 样式可适当调整以提升视觉效果\n" +
+               "3. 针对反馈中提到的问题进行改进，突出与岗位匹配的经验和技能\n" +
+               "4. 用词专业，排版清晰\n" +
+               "5. 直接返回完整的 HTML 代码，不要任何解释\n\n" +
+               "岗位描述：\n{{jd}}";
+    }
+
+    /**
+     * 获取阶段二优化 Agent 用户提示词。
+     */
+    public String getPostScoringTailorUserPrompt() {
+        return "原始简历（必须在此基础上优化，不能重写）：\n{{cv}}\n\n" +
+               "多角色评审反馈：\n{{cvReview}}\n\n" +
+               "请根据岗位描述和评审反馈优化这份简历。";
     }
 }

@@ -71,6 +71,6 @@ class AgentPromptConfigTest {
         var tailor = promptConfig.getTailorConfig();
         assertNotNull(tailor.getSystemPrompt());
         assertNotNull(tailor.getUserPrompt());
-        assertTrue(tailor.getSystemPrompt().contains("简历优化"));
+        assertTrue(tailor.getSystemPrompt().contains("润色优化"));
     }
 }

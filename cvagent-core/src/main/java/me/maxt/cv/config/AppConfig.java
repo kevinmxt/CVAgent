@@ -78,8 +78,10 @@ public class AppConfig {
     private double agentPassScore;
     /** 多角色评审配置，key 为角色标识 */
     private Map<String, ReviewerRoleConfig> reviewerRoles;
-    /** 优化 Agent 配置 */
+    /** 优化 Agent 配置（阶段一：生成时自动润色） */
     private TailorConfig tailorConfig;
+    /** 阶段二优化 Agent 配置（评分后，含 JD + 评审反馈） */
+    private TailorConfig postScoringTailorConfig;
 
     // ========== 服务器配置 ==========
 
@@ -102,7 +104,7 @@ public class AppConfig {
 
         // 数据库默认值
         this.dbMode = "h2";
-        this.h2Url = "jdbc:h2:file:./data/cvagent;AUTO_SERVER=TRUE";
+        this.h2Url = "jdbc:h2:file:~/cvagent/data;AUTO_SERVER=TRUE";
         this.h2Username = "sa";
         this.h2Password = "";
         this.mysqlUrl = "jdbc:mysql://localhost:3306/cvagent?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf-8";
@@ -223,6 +225,14 @@ public class AppConfig {
                 config.tailorConfig = new TailorConfig();
                 config.tailorConfig.setSystemPrompt(getString(tailor, "systemPrompt", ""));
                 config.tailorConfig.setUserPrompt(getString(tailor, "userPrompt", ""));
+            }
+
+            // 阶段二优化 Agent（评分后，含 JD + 评审反馈）
+            Map<String, Object> tailorPost = (Map<String, Object>) agent.get("tailorPostScoring");
+            if (tailorPost != null) {
+                config.postScoringTailorConfig = new TailorConfig();
+                config.postScoringTailorConfig.setSystemPrompt(getString(tailorPost, "systemPrompt", ""));
+                config.postScoringTailorConfig.setUserPrompt(getString(tailorPost, "userPrompt", ""));
             }
         }
 
@@ -365,6 +375,7 @@ public class AppConfig {
         return Collections.unmodifiableMap(reviewerRoles);
     }
     public TailorConfig getTailorConfig() { return tailorConfig; }
+    public TailorConfig getPostScoringTailorConfig() { return postScoringTailorConfig; }
 
     public int getServerPort() { return serverPort; }
 

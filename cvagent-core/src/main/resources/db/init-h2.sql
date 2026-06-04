@@ -49,31 +49,41 @@ CREATE TABLE IF NOT EXISTS generated_cv (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     work_exp_id      BIGINT        NOT NULL COMMENT '关联工作经历 ID',
     template_id      BIGINT        NOT NULL COMMENT '关联模板 ID',
-    jd_id            BIGINT        NOT NULL COMMENT '关联 JD ID',
     final_content    CLOB          NOT NULL COMMENT '最终生成的 HTML 简历内容',
-    final_score      DOUBLE        NULL DEFAULT 0 COMMENT '最终综合评分 (0-1)',
-    final_feedback   TEXT          NULL COMMENT '最终反馈意见',
-    role_scores      TEXT          NULL COMMENT '各角色评分快照（JSON格式）',
-    iteration_count  INT           NOT NULL DEFAULT 0 COMMENT 'Agent 迭代次数',
     status           VARCHAR(20)   NOT NULL DEFAULT 'DRAFT' COMMENT '状态：DRAFT/FINAL/EXPORTED',
     created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
     FOREIGN KEY (work_exp_id) REFERENCES work_experience(id) ON DELETE CASCADE,
-    FOREIGN KEY (template_id)  REFERENCES cv_template(id) ON DELETE CASCADE,
-    FOREIGN KEY (jd_id)        REFERENCES job_description(id) ON DELETE CASCADE
+    FOREIGN KEY (template_id)  REFERENCES cv_template(id) ON DELETE CASCADE
 );
 
--- CV 生成迭代记录表
-CREATE TABLE IF NOT EXISTS cv_generation_record (
+-- CV 评分结果表
+CREATE TABLE IF NOT EXISTS cv_scoring_result (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     generated_cv_id  BIGINT        NOT NULL COMMENT '关联生成的简历 ID',
+    jd_id            BIGINT        NOT NULL COMMENT '关联 JD ID',
+    final_score      DOUBLE        NULL COMMENT '最终综合评分 (0-1)',
+    final_feedback   TEXT          NULL COMMENT '最终反馈意见',
+    role_scores      TEXT          NULL COMMENT '各角色评分快照（JSON格式）',
+    iteration_count  INT           NOT NULL DEFAULT 0 COMMENT 'Agent 迭代次数',
+    status           VARCHAR(20)   NOT NULL DEFAULT 'SCORING' COMMENT '状态：SCORING/COMPLETED/FAILED',
+    created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (generated_cv_id) REFERENCES generated_cv(id) ON DELETE CASCADE,
+    FOREIGN KEY (jd_id)           REFERENCES job_description(id) ON DELETE CASCADE
+);
+
+-- CV 生成迭代记录表（归属于一次评分）
+CREATE TABLE IF NOT EXISTS cv_generation_record (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    scoring_result_id BIGINT       NOT NULL COMMENT '关联评分结果 ID',
     iteration        INT           NOT NULL COMMENT '第几次迭代（从 1 开始）',
     role_scores      TEXT          NULL COMMENT '各角色评分快照（JSON格式）',
     overall_score    DOUBLE        NOT NULL DEFAULT 0 COMMENT '本次迭代综合评分',
     feedback         TEXT          NULL COMMENT '本次迭代反馈',
     cv_snapshot      CLOB          NOT NULL COMMENT '本次迭代后的 HTML 简历快照',
     created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    FOREIGN KEY (generated_cv_id) REFERENCES generated_cv(id) ON DELETE CASCADE
+    FOREIGN KEY (scoring_result_id) REFERENCES cv_scoring_result(id) ON DELETE CASCADE
 );
 
 -- 索引
@@ -81,7 +91,8 @@ CREATE INDEX IF NOT EXISTS idx_work_exp_name ON work_experience(person_name);
 CREATE INDEX IF NOT EXISTS idx_cv_template_preset ON cv_template(is_preset);
 CREATE INDEX IF NOT EXISTS idx_jd_title ON job_description(title);
 CREATE INDEX IF NOT EXISTS idx_gen_cv_status ON generated_cv(status);
-CREATE INDEX IF NOT EXISTS idx_gen_record_cv_id ON cv_generation_record(generated_cv_id);
+CREATE INDEX IF NOT EXISTS idx_scoring_result_cv_id ON cv_scoring_result(generated_cv_id);
+CREATE INDEX IF NOT EXISTS idx_gen_record_result_id ON cv_generation_record(scoring_result_id);
 
 -- 迁移：为已有数据库添加 other_info 列
 ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS other_info TEXT NULL;
