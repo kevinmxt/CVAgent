@@ -13,7 +13,7 @@ import type { WorkExperience } from '../api/types';
 
 export default function WorkExperiencesPage() {
   const { page, setPage } = usePagination();
-  const { data, loading, error, refetch, importFile, update, remove } = useWorkExperiences(page, 10);
+  const { data, loading, error, refetch, importFile, update, remove, duplicate } = useWorkExperiences(page, 10);
   const { addToast } = useToast();
   const [uploading, setUploading] = useState(false);
   const [editItem, setEditItem] = useState<WorkExperience | null>(null);
@@ -72,6 +72,15 @@ export default function WorkExperiencesPage() {
     }
   };
 
+  const handleDuplicate = async (item: WorkExperience) => {
+    try {
+      await duplicate(item.id);
+      addToast('success', '已创建副本');
+    } catch (e: any) {
+      addToast('error', e.message || '复制失败');
+    }
+  };
+
   const columns = [
     { key: 'personName', header: '姓名', render: (r: WorkExperience) => r.personName || '-' },
     { key: 'personEmail', header: '邮箱', render: (r: WorkExperience) => r.personEmail || '-' },
@@ -82,6 +91,7 @@ export default function WorkExperiencesPage() {
       render: (r: WorkExperience) => (
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline btn-sm" onClick={() => openEdit(r)}>编辑</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => handleDuplicate(r)}>复制</button>
           <button className="btn btn-danger btn-sm" onClick={() => setDeleteItem(r)}>删除</button>
         </div>
       ),

@@ -50,6 +50,8 @@ public class WorkExperienceRoutes {
         app.get(PREFIX + "/{id}", this::handleGetById);
         // 编辑
         app.put(PREFIX + "/{id}", this::handleUpdate);
+        // 复制
+        app.post(PREFIX + "/{id}/duplicate", this::handleDuplicate);
         // 删除
         app.delete(PREFIX + "/{id}", this::handleDelete);
     }
@@ -108,6 +110,16 @@ public class WorkExperienceRoutes {
         Long id = parseIdParam(ctx);
         WorkExperience update = ctx.bodyAsClass(WorkExperience.class);
         WorkExperience result = service.update(id, update);
+        ctx.json(result);
+    }
+
+    /**
+     * 处理复制请求。
+     */
+    private void handleDuplicate(Context ctx) {
+        Long id = parseIdParam(ctx);
+        WorkExperience result = service.duplicate(id);
+        ctx.status(201);
         ctx.json(result);
     }
 

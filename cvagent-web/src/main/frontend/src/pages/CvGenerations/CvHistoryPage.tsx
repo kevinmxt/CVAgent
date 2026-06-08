@@ -26,7 +26,7 @@ const SCORE_STYLES: Record<string, string> = {
 export default function CvHistoryPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const { listCvs, exportCv } = useCvGenerations();
+  const { listCvs, exportCv, duplicateCv } = useCvGenerations();
 
   const [data, setData] = useState<PageResult<GeneratedCv> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,6 +76,16 @@ export default function CvHistoryPage() {
     }
   };
 
+  const handleDuplicate = async (cv: GeneratedCv) => {
+    const result = await duplicateCv(cv.id);
+    if (result) {
+      addToast('success', '已创建副本');
+      load();
+    } else {
+      addToast('error', '复制失败');
+    }
+  };
+
   const columns = [
     {
       key: 'workExpName',
@@ -111,6 +121,9 @@ export default function CvHistoryPage() {
           </button>
           <button className="btn btn-sm btn-primary" onClick={(e) => handleExport(e, cv)}>
             导出
+          </button>
+          <button className="btn btn-sm btn-ghost" onClick={(e) => { e.stopPropagation(); handleDuplicate(cv); }}>
+            复制
           </button>
           <button
             className="btn btn-sm btn-ghost"

@@ -22,6 +22,10 @@ export function updateWorkExperience(id: number, data: Partial<WorkExperience>):
   });
 }
 
+export function duplicateWorkExperience(id: number): Promise<WorkExperience> {
+  return request<WorkExperience>(`${BASE}/${id}/duplicate`, { method: 'POST' });
+}
+
 export function deleteWorkExperience(id: number): Promise<void> {
   return request<void>(`${BASE}/${id}`, { method: 'DELETE' });
 }

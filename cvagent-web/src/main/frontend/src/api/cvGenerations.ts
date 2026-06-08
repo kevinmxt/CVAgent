@@ -47,6 +47,10 @@ export async function exportCv(id: number): Promise<void> {
   triggerDownload(blob, filename);
 }
 
+export function duplicateGeneratedCv(id: number): Promise<GeneratedCv> {
+  return request<GeneratedCv>(`${BASE}/${id}/duplicate`, { method: 'POST' });
+}
+
 export function deleteGeneratedCv(id: number): Promise<void> {
   return request<void>(`${BASE}/${id}`, { method: 'DELETE' });
 }

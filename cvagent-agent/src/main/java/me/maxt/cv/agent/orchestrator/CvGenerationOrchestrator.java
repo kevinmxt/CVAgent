@@ -280,8 +280,9 @@ public class CvGenerationOrchestrator {
                     resolvedTailorSystemPrompt,
                     resolvedTailorUserPrompt
             );
-            log.info("简历优化完成: inputLength={}, outputLength={}", cv.length(), tailored.length());
-            return tailored;
+            String cleaned = stripMarkdownFences(tailored);
+            log.info("简历优化完成: inputLength={}, outputLength={}", cv.length(), cleaned.length());
+            return cleaned;
         } catch (Exception e) {
             log.error("简历优化失败", e);
             throw new AppException(ErrorCode.CV_GENERATION_FAILED, e);
@@ -289,6 +290,32 @@ public class CvGenerationOrchestrator {
     }
 
     // ========== 内部类 ==========
+
+    /**
+     * 从 LLM 响应中剥离 Markdown 代码围栏，提取纯 HTML 内容。
+     */
+    static String stripMarkdownFences(String response) {
+        if (response == null || response.isEmpty()) return response;
+        int start = response.indexOf("<!DOCTYPE");
+        if (start < 0) start = response.indexOf("<html");
+        if (start >= 0) {
+            int end = response.lastIndexOf("</html>");
+            if (end > start) return response.substring(start, end + 7);
+        }
+        int codeStart = response.indexOf("```html");
+        if (codeStart >= 0) {
+            codeStart += 7;
+            int codeEnd = response.indexOf("```", codeStart);
+            if (codeEnd > codeStart) return response.substring(codeStart, codeEnd).trim();
+        }
+        int genericStart = response.indexOf("```");
+        if (genericStart >= 0) {
+            genericStart += 3;
+            int genericEnd = response.indexOf("```", genericStart);
+            if (genericEnd > genericStart) return response.substring(genericStart, genericEnd).trim();
+        }
+        return response;
+    }
 
     /**
      * CV 生成结果，包含最终简历、评审结果和迭代历史。

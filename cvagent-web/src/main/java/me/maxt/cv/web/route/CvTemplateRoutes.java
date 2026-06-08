@@ -46,6 +46,7 @@ public class CvTemplateRoutes {
         app.post(PREFIX, this::handleCreate);
         app.post(PREFIX + "/import", this::handleImport);
         app.put(PREFIX + "/{id}", this::handleUpdate);
+        app.post(PREFIX + "/{id}/duplicate", this::handleDuplicate);
         app.delete(PREFIX + "/{id}", this::handleDelete);
     }
 
@@ -83,6 +84,16 @@ public class CvTemplateRoutes {
         Long id = parseId(ctx);
         CvTemplate update = ctx.bodyAsClass(CvTemplate.class);
         CvTemplate result = service.update(id, update);
+        ctx.json(result);
+    }
+
+    /**
+     * 处理复制模板请求。
+     */
+    private void handleDuplicate(Context ctx) {
+        Long id = parseId(ctx);
+        CvTemplate result = service.duplicate(id);
+        ctx.status(201);
         ctx.json(result);
     }
 

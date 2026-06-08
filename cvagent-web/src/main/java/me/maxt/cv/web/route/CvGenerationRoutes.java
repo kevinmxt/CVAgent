@@ -24,7 +24,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -77,6 +79,7 @@ public class CvGenerationRoutes {
         app.get(PREFIX + "/{id}/preview", this::handlePreview);
         app.put(PREFIX + "/{id}", this::handleUpdate);
         app.post(PREFIX + "/{id}/export", this::handleExport);
+        app.post(PREFIX + "/{id}/duplicate", this::handleDuplicate);
         app.delete(PREFIX + "/{id}", this::handleDelete);
     }
 
@@ -157,7 +160,9 @@ public class CvGenerationRoutes {
 
                 var reviewResult = orchestrator.review(cv.getFinalContent(), jd.getContent());
 
-                String roleScoresJson = cvGenService.toRoleScoresJson(reviewResult.getRoleResults());
+                Map<String, Double> scoresOnly = new LinkedHashMap<>();
+                reviewResult.getRoleResults().forEach((key, val) -> scoresOnly.put(key, val.getScore()));
+                String roleScoresJson = cvGenService.toRoleScoresJson(scoresOnly);
                 scoringResultService.complete(scoringResult.getId(),
                         reviewResult.getOverallScore(),
                         reviewResult.getCombinedFeedback(),
@@ -278,6 +283,13 @@ public class CvGenerationRoutes {
         ctx.contentType(exportService.getContentType());
         ctx.header("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
         ctx.result(fileStream);
+    }
+
+    private void handleDuplicate(Context ctx) {
+        Long id = parseId(ctx);
+        GeneratedCv result = cvGenService.duplicate(id);
+        ctx.status(201);
+        ctx.json(result);
     }
 
     private void handleDelete(Context ctx) {

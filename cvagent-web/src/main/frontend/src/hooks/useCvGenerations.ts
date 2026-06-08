@@ -157,6 +157,14 @@ export function useCvGenerations() {
     return api.listGeneratedCvs(page, size);
   }, []);
 
+  const duplicateCv = useCallback(async (id: number): Promise<GeneratedCv | null> => {
+    try {
+      return await api.duplicateGeneratedCv(id);
+    } catch {
+      return null;
+    }
+  }, []);
+
   const reset = useCallback(() => {
     setState({ status: 'idle', error: null });
     setResult(null);
@@ -169,6 +177,6 @@ export function useCvGenerations() {
     state, result, scoringResults, history,
     loadingScoring, updating, exporting, scoring, optimizing,
     generate, cancel, loadResult, loadScoringResults, loadHistory,
-    updateContent, exportCv, scoreCv, optimizeCv, listCvs, reset,
+    updateContent, exportCv, scoreCv, optimizeCv, listCvs, duplicateCv, reset,
   };
 }

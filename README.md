@@ -265,16 +265,17 @@ mvn test -pl cvagent-core
 1. 用户选择工作经历 + 模板（JD 可选），`CvGenerationService.fillTemplate()` 将工作经历数据填入 HTML 模板
 2. 阶段一优化自动执行，修排版/措辞后持久化
 3. 用户在结果页面选择 JD 并点击「开始评分」，后台异步启动多角色评审（HR/技术专家/团队领导），一轮评审完成
-4. `performMultiRoleReview()` 按权重计算综合评分（默认阈值 0.8），生成反馈
-5. 用户可多次选择不同 JD 进行评分，每次评分结果独立存储
-6. 评分完成后可点击「优化简历」基于 JD + 反馈进行阶段二优化，预览后保存
+4. `performMultiRoleReview()` 按权重计算综合评分（默认阈值 0.8），生成反馈。评分结果以 scores-only JSON 存储（`{"hr":0.8,"techExpert":0.7}`），前端直接解析为数值
+5. `performTailoring()` 返回前自动剥离 LLM 可能包裹的 Markdown 代码围栏（`` ```html `` / `` ``` ``），确保输出为纯 HTML
+6. 用户可多次选择不同 JD 进行评分，每次评分结果独立存储
+7. 评分完成后可点击「优化简历」基于 JD + 反馈进行阶段二优化，预览后保存
 
 ### REST API（cvagent-web）
 
 Web 模块基于 Javalin 提供 RESTful 接口：
 
-- **CV 生成路由**（`CvGenerationRoutes`）：`GET /` 分页列表、`POST /generate` 生成（填模板 + 阶段一优化）、`POST /{id}/score?jdId=X` 异步评分、`GET /{id}/scoring-results` 评分历史、`GET /{id}/scoring-results/{srId}/history` 迭代历史、`POST /{id}/optimize?srId=X` 阶段二优化、`GET /{id}` 查询、`GET /{id}/preview` HTML 预览、`PUT /{id}` 更新内容、`POST /{id}/export` 导出下载、`DELETE /{id}` 删除
-- **基础 CRUD 路由**：`CvTemplateRoutes`、`JobDescriptionRoutes`、`WorkExperienceRoutes` 提供对应的 CRUD 接口
+- **CV 生成路由**（`CvGenerationRoutes`）：`GET /` 分页列表、`POST /generate` 生成（填模板 + 阶段一优化）、`POST /{id}/score?jdId=X` 异步评分、`GET /{id}/scoring-results` 评分历史、`GET /{id}/scoring-results/{srId}/history` 迭代历史、`POST /{id}/optimize?srId=X` 阶段二优化、`GET /{id}` 查询、`GET /{id}/preview` HTML 预览、`PUT /{id}` 更新内容、`POST /{id}/export` 导出下载、`POST /{id}/duplicate` 复制、`DELETE /{id}` 删除
+- **基础 CRUD 路由**：`CvTemplateRoutes`、`JobDescriptionRoutes`、`WorkExperienceRoutes` 提供对应的 CRUD 接口，均支持 `POST /{id}/duplicate` 复制功能
 - **全局处理**：`ExceptionHandler` 统一异常处理、`CorsHandler` 跨域支持
 - **分页支持**：`PageResult` 泛型分页响应 DTO
 
@@ -282,8 +283,8 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 
 `cvagent-web/src/main/frontend/` 目录包含完整的单页应用：
 
-- **工作经历维护**：支持从 txt/docx/html/pdf 文件导入，AI 自动解析姓名、邮箱、电话、技能、个人简介、工作经历、教育背景等字段，支持在线编辑和删除
-- **简历模板维护**：预置 2 套模板（标准专业/简洁高效），支持自定义模板上传，预置模板受保护不可删除
+- **工作经历维护**：支持从 txt/docx/html/pdf 文件导入，AI 自动解析姓名、邮箱、电话、技能、个人简介、工作经历、教育背景等字段，支持在线编辑、复制和删除
+- **简历模板维护**：预置 2 套模板（标准专业/简洁高效），支持自定义模板上传，预置模板受保护不可删除但可复制为自定义模板
 - **JD 维护**：支持文件导入和手动创建，存储职位和公司信息
 - **CV 生成**：选择工作经历 + 模板（JD 可选），一键填充模板生成 HTML 简历（含阶段一自动优化）。生成后可选择 JD 手动触发异步评分（多角色评审：HR/技术专家/团队领导），系统后台执行评分并自动回写结果。支持多次选择不同 JD 分别评分，每次评分独立展示。评分完成后可触发阶段二优化（基于 JD + 反馈），预览后保存
 - **生成记录**：查看所有历史生成记录，支持分页浏览、导出和删除
@@ -297,11 +298,11 @@ Web 模块基于 Javalin 提供 RESTful 接口：
 
 `cvagent-core` 提供完整的业务服务层：
 
-- `CvGenerationService`：简历生成编排服务，负责模板填充（将工作经历数据替换 HTML 模板占位符）、加载生成上下文、保存生成结果与迭代记录、管理生成简历生命周期（查询、更新、导出、删除）
-- `CvTemplateService`：简历模板管理服务，支持模板 CRUD，预置模板受保护不可删除
+- `CvGenerationService`：简历生成编排服务，负责模板填充（将工作经历数据替换 HTML 模板占位符）、加载生成上下文、保存生成结果与迭代记录、管理生成简历生命周期（查询、更新、导出、删除）、复制生成记录（浅复制，状态重置为草稿）
+- `CvTemplateService`：简历模板管理服务，支持模板 CRUD 和复制，预置模板受保护不可删除但可复制
 - `ExportService`：简历导出服务，将生成的 HTML 简历导出为可下载的文件流，支持生成文件名和导出状态标记
 - `JobDescriptionService`：岗位描述管理服务，支持从文件导入（txt/docx/html/pdf）、手动创建、分页查询、编辑和删除
-- `WorkExperienceService`：工作经历管理服务，支持从文件导入（AI 自动解析姓名/邮箱/电话/技能/个人简介/工作经历/教育背景）、手动编辑个人信息和履历字段
+- `WorkExperienceService`：工作经历管理服务，支持从文件导入（AI 自动解析姓名/邮箱/电话/技能/个人简介/工作经历/教育背景）、手动编辑个人信息和履历字段、复制创建副本
 
 ### 数据实体
 

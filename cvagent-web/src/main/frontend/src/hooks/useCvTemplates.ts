@@ -38,5 +38,10 @@ export function useCvTemplates() {
     fetch();
   }, [fetch]);
 
-  return { templates, loading, error, refetch: fetch, create, update, remove, importFile };
+  const duplicate = useCallback(async (id: number) => {
+    await api.duplicateTemplate(id);
+    fetch();
+  }, [fetch]);
+
+  return { templates, loading, error, refetch: fetch, create, update, remove, importFile, duplicate };
 }

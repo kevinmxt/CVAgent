@@ -33,5 +33,10 @@ export function useWorkExperiences(page: number, size: number) {
     fetch();
   }, [fetch]);
 
-  return { data, loading, error, refetch: fetch, importFile, update, remove };
+  const duplicate = useCallback(async (id: number) => {
+    await api.duplicateWorkExperience(id);
+    fetch();
+  }, [fetch]);
+
+  return { data, loading, error, refetch: fetch, importFile, update, remove, duplicate };
 }

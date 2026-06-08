@@ -25,6 +25,10 @@ export function updateTemplate(id: number, data: Partial<CvTemplate>): Promise<C
   });
 }
 
+export function duplicateTemplate(id: number): Promise<CvTemplate> {
+  return request<CvTemplate>(`${BASE}/${id}/duplicate`, { method: 'POST' });
+}
+
 export function deleteTemplate(id: number): Promise<void> {
   return request<void>(`${BASE}/${id}`, { method: 'DELETE' });
 }

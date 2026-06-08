@@ -217,6 +217,22 @@ public class CvGenerationService {
     }
 
     /**
+     * 复制生成的简历（浅复制，不复制评分结果）。
+     *
+     * @param id 主键 ID
+     * @return 新创建的生成简历实体
+     * @throws AppException 如果记录不存在
+     */
+    public GeneratedCv duplicate(Long id) {
+        GeneratedCv existing = getGeneratedCv(id);
+        existing.setId(null);
+        existing.setStatus(GeneratedCv.STATUS_DRAFT);
+        log.info("复制生成简历: id={}, newWorkExpId={}, newTemplateId={}",
+                id, existing.getWorkExpId(), existing.getTemplateId());
+        return generatedCvRepo.insert(existing);
+    }
+
+    /**
      * 删除生成的简历及其迭代记录。
      *
      * @param id 主键 ID
@@ -228,12 +244,12 @@ public class CvGenerationService {
     }
 
     /**
-     * 将评分数据序列化为 JSON 字符串。
+     * 将角色评分映射序列化为 JSON 字符串。
      *
-     * @param roleScores 各角色评分映射
-     * @return JSON 字符串
+     * @param roleScores 各角色评分映射（key=角色标识, value=0~1 的评分）
+     * @return JSON 字符串，如 {"hr":0.8,"techExpert":0.7}
      */
-    public String toRoleScoresJson(Map<String, ?> roleScores) {
+    public String toRoleScoresJson(Map<String, Double> roleScores) {
         try {
             return MAPPER.writeValueAsString(roleScores);
         } catch (JsonProcessingException e) {

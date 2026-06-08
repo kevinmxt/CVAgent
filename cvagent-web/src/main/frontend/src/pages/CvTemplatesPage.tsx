@@ -14,7 +14,7 @@ import type { CvTemplate } from '../api/types';
 const EMPTY_FORM = { name: '', description: '', templateContent: '', fileName: '' };
 
 export default function CvTemplatesPage() {
-  const { templates, loading, error, refetch, create, update, remove, importFile } = useCvTemplates();
+  const { templates, loading, error, refetch, create, update, remove, importFile, duplicate } = useCvTemplates();
   const { addToast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<CvTemplate | null>(null);
@@ -87,6 +87,15 @@ export default function CvTemplatesPage() {
     }
   };
 
+  const handleDuplicate = async (item: CvTemplate) => {
+    try {
+      await duplicate(item.id);
+      addToast('success', '已创建副本');
+    } catch (e: any) {
+      addToast('error', e.message || '复制失败');
+    }
+  };
+
   const templateColumns = (isPreset: boolean) => [
     { key: 'name', header: '名称', render: (t: CvTemplate) => t.name },
     { key: 'description', header: '描述', render: (t: CvTemplate) => t.description || '-' },
@@ -97,10 +106,14 @@ export default function CvTemplatesPage() {
       render: (t: CvTemplate) => (
         <div style={{ display: 'flex', gap: 8 }}>
           {isPreset ? (
-            <button className="btn btn-outline btn-sm" onClick={() => openEdit(t)}>查看</button>
+            <>
+              <button className="btn btn-outline btn-sm" onClick={() => openEdit(t)}>查看</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => handleDuplicate(t)}>复制</button>
+            </>
           ) : (
             <>
               <button className="btn btn-outline btn-sm" onClick={() => openEdit(t)}>编辑</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => handleDuplicate(t)}>复制</button>
               <button className="btn btn-danger btn-sm" onClick={() => setDeleteItem(t)}>删除</button>
             </>
           )}

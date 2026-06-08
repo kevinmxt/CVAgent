@@ -142,6 +142,21 @@ public class WorkExperienceService {
     }
 
     /**
+     * 复制工作经历，创建一份副本。
+     *
+     * @param id 主键 ID
+     * @return 新创建的工作经历实体
+     * @throws AppException 如果记录不存在
+     */
+    public WorkExperience duplicate(Long id) {
+        WorkExperience existing = getById(id);
+        existing.setId(null);
+        existing.setPersonName(existing.getPersonName() + "_副本");
+        log.info("复制工作经历: id={}, newName={}", id, existing.getPersonName());
+        return repository.insert(existing);
+    }
+
+    /**
      * 删除工作经历。
      *
      * @param id 主键 ID

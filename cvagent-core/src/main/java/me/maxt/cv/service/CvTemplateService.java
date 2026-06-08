@@ -105,6 +105,22 @@ public class CvTemplateService {
     }
 
     /**
+     * 复制模板，创建一份副本。
+     *
+     * @param id 主键 ID
+     * @return 新创建的模板实体
+     * @throws AppException 如果模板不存在
+     */
+    public CvTemplate duplicate(Long id) {
+        CvTemplate existing = getById(id);
+        existing.setId(null);
+        existing.setName(existing.getName() + "_副本");
+        existing.setIsPreset(false);
+        log.info("复制简历模板: id={}, newName={}", id, existing.getName());
+        return repository.insert(existing);
+    }
+
+    /**
      * 删除模板。
      *
      * <p>预置模板不可删除，会抛出 {@link ErrorCode#CANNOT_DELETE_PRESET_TEMPLATE} 异常。</p>
